@@ -1,25 +1,12 @@
 from __future__ import annotations
 
-from typing import Protocol
-
 from vajra.execution.contracts import (
     ExecutionRequest,
     ExecutionResult,
     ExecutionStatus,
 )
 from vajra.policy.contracts import PolicyDecisionType
-
-
-class ExecutionBackend(Protocol):
-    """
-    Backend interface used by the Execution Broker.
-
-    Backends perform operations; the broker remains responsible for
-    authorization.
-    """
-
-    def execute(self, request: ExecutionRequest) -> ExecutionResult:
-        ...
+from vajra.execution.backend import ExecutionBackend
 
 
 class ExecutionBroker:
