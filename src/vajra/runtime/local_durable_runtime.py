@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock
@@ -8,6 +9,14 @@ from typing import Callable, TypeVar
 
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class DurableTimer:
+    timer_id: str
+    due_at: str
+    state: str = "SCHEDULED"
+    sequence: int = 0
 
 
 @dataclass(frozen=True)
@@ -44,6 +53,7 @@ class LocalDurableRuntime:
         self._max_retries = max_retries
         self._lock = RLock()
         self._records: dict[str, DurableRecord] = {}
+        self._timers: dict[str, DurableTimer] = {}
         self._next_sequence = 1
         self._load()
 
@@ -114,6 +124,103 @@ class LocalDurableRuntime:
                     state="CANCELLED",
                 )
             )
+
+    def schedule_timer(
+        self,
+        timer_id: str,
+        due_at: datetime,
+    ) -> DurableTimer:
+        """Persist a timer without creating an in-process scheduler."""
+        if due_at.tzinfo is None:
+            raise ValueError("due_at must be timezone-aware")
+
+        with self._lock:
+            existing = self._timers.get(timer_id)
+            if existing is not None:
+                return existing
+
+            normalized = due_at.astimezone(timezone.utc).isoformat()
+
+            timer = DurableTimer(
+                timer_id=timer_id,
+                due_at=normalized,
+            )
+            self._append_timer(timer)
+            return self._timers[timer_id]
+
+    def get_timer(self, timer_id: str) -> DurableTimer | None:
+        with self._lock:
+            return self._timers.get(timer_id)
+
+    def due_timers(
+        self,
+        now: datetime | None = None,
+    ) -> tuple[DurableTimer, ...]:
+        if now is None:
+            now = datetime.now(timezone.utc)
+
+        if now.tzinfo is None:
+            raise ValueError("now must be timezone-aware")
+
+        current = now.astimezone(timezone.utc)
+
+        with self._lock:
+            return tuple(
+                timer
+                for timer in self._timers.values()
+                if timer.state == "SCHEDULED"
+                and datetime.fromisoformat(timer.due_at) <= current
+            )
+
+    def consume_timer(self, timer_id: str) -> DurableTimer:
+        with self._lock:
+            existing = self._timers.get(timer_id)
+
+            if existing is None:
+                raise KeyError(f"Unknown timer: {timer_id}")
+
+            if existing.state == "CONSUMED":
+                return existing
+
+            if existing.state != "SCHEDULED":
+                raise RuntimeError(
+                    f"Timer is not consumable: {timer_id}"
+                )
+
+            consumed = DurableTimer(
+                timer_id=existing.timer_id,
+                due_at=existing.due_at,
+                state="CONSUMED",
+            )
+            self._append_timer(consumed)
+            return self._timers[timer_id]
+
+    def _append_timer(self, timer: DurableTimer) -> None:
+        sequence = self._next_sequence
+
+        entry = {
+            "type": "timer",
+            "timer_id": timer.timer_id,
+            "due_at": timer.due_at,
+            "state": timer.state,
+            "sequence": sequence,
+        }
+
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+
+        with self._path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, sort_keys=True) + "\n")
+            handle.flush()
+
+        persisted = DurableTimer(
+            timer_id=timer.timer_id,
+            due_at=timer.due_at,
+            state=timer.state,
+            sequence=sequence,
+        )
+
+        self._timers[timer.timer_id] = persisted
+        self._next_sequence += 1
 
     def recoverable_executions(self) -> tuple[DurableRecord, ...]:
         with self._lock:
@@ -285,6 +392,20 @@ class LocalDurableRuntime:
                     continue
 
                 entry = json.loads(line)
+
+                if entry.get("type") == "timer":
+                    timer = DurableTimer(
+                        timer_id=entry["timer_id"],
+                        due_at=entry["due_at"],
+                        state=entry["state"],
+                        sequence=entry["sequence"],
+                    )
+                    self._timers[timer.timer_id] = timer
+                    self._next_sequence = max(
+                        self._next_sequence,
+                        timer.sequence + 1,
+                    )
+                    continue
 
                 record = DurableRecord(
                     execution_id=entry["execution_id"],

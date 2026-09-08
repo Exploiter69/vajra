@@ -393,3 +393,156 @@ def test_negative_retry_limit_is_rejected(tmp_path: Path):
 
     with pytest.raises(ValueError, match="max_retries must be >= 0"):
         LocalDurableRuntime(journal, max_retries=-1)
+
+
+def test_completed_execution_is_idempotent_across_restart(
+    tmp_path: Path,
+):
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal)
+
+    calls = 0
+
+    def operation():
+        nonlocal calls
+        calls += 1
+        return "stable-result"
+
+    first = runtime.execute("exec-1", operation)
+
+    assert first.state == "COMPLETED"
+    assert first.result == "stable-result"
+    assert calls == 1
+
+    restarted = LocalDurableRuntime(journal)
+
+    second = restarted.execute(
+        "exec-1",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("idempotent execution must not rerun")
+        ),
+    )
+
+    assert second.state == "COMPLETED"
+    assert second.result == "stable-result"
+    assert second.sequence == first.sequence
+
+
+def test_cancelled_execution_is_idempotent_across_restart(
+    tmp_path: Path,
+):
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal)
+
+    runtime.start_execution("exec-1")
+    runtime.cancel("exec-1")
+
+    first = runtime.get_execution("exec-1")
+
+    assert first is not None
+    assert first.state == "CANCELLED"
+
+    restarted = LocalDurableRuntime(journal)
+
+    second = restarted.execute(
+        "exec-1",
+        lambda: (_ for _ in ()).throw(
+            AssertionError("cancelled execution must not run")
+        ),
+    )
+
+    assert second.state == "CANCELLED"
+    assert second.sequence == first.sequence
+
+
+def test_timer_survives_restart_and_becomes_due(tmp_path: Path):
+    from datetime import datetime, timezone, timedelta
+
+    journal = tmp_path / "runtime.jsonl"
+
+    due_at = datetime.now(timezone.utc) + timedelta(seconds=60)
+
+    runtime = LocalDurableRuntime(journal)
+
+    scheduled = runtime.schedule_timer("timer-1", due_at)
+
+    assert scheduled.state == "SCHEDULED"
+    assert scheduled.due_at == due_at.astimezone(timezone.utc).isoformat()
+
+    restarted = LocalDurableRuntime(journal)
+
+    timer = restarted.get_timer("timer-1")
+
+    assert timer is not None
+    assert timer.state == "SCHEDULED"
+    assert timer.due_at == scheduled.due_at
+
+    assert restarted.due_timers(
+        due_at - timedelta(seconds=1)
+    ) == ()
+
+    due = restarted.due_timers(due_at)
+
+    assert len(due) == 1
+    assert due[0].timer_id == "timer-1"
+
+
+def test_timer_consumption_is_durable_and_idempotent(
+    tmp_path: Path,
+):
+    from datetime import datetime, timezone, timedelta
+
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal)
+
+    due_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    runtime.schedule_timer("timer-1", due_at)
+
+    first = runtime.consume_timer("timer-1")
+
+    assert first.state == "CONSUMED"
+
+    second = runtime.consume_timer("timer-1")
+
+    assert second.state == "CONSUMED"
+    assert second.sequence == first.sequence
+
+    restarted = LocalDurableRuntime(journal)
+
+    persisted = restarted.get_timer("timer-1")
+
+    assert persisted is not None
+    assert persisted.state == "CONSUMED"
+    assert restarted.due_timers(
+        datetime.now(timezone.utc) + timedelta(seconds=1)
+    ) == ()
+
+
+def test_timer_requires_timezone_aware_due_at(tmp_path: Path):
+    from datetime import datetime
+
+    runtime = LocalDurableRuntime(tmp_path / "runtime.jsonl")
+
+    with pytest.raises(ValueError, match="timezone-aware"):
+        runtime.schedule_timer(
+            "timer-1",
+            datetime(2030, 1, 1),
+        )
+
+
+def test_duplicate_timer_schedule_is_idempotent(tmp_path: Path):
+    from datetime import datetime, timezone, timedelta
+
+    runtime = LocalDurableRuntime(tmp_path / "runtime.jsonl")
+
+    due_at = datetime.now(timezone.utc) + timedelta(seconds=30)
+
+    first = runtime.schedule_timer("timer-1", due_at)
+    second = runtime.schedule_timer("timer-1", due_at)
+
+    assert second == first
+    assert second.sequence == first.sequence
