@@ -245,3 +245,151 @@ def test_unknown_execution_cannot_be_recovered(tmp_path: Path):
 
     with pytest.raises(KeyError, match="Unknown execution"):
         runtime.recover("missing", lambda: "wrong")
+
+
+def test_failed_execution_can_be_retried_with_durable_retry_state(
+    tmp_path: Path,
+):
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal)
+
+    calls = 0
+
+    def operation():
+        nonlocal calls
+        calls += 1
+
+        if calls == 1:
+            raise RuntimeError("transient failure")
+
+        return "success"
+
+    with pytest.raises(RuntimeError, match="transient failure"):
+        runtime.execute("exec-1", operation)
+
+    retried = runtime.retry("exec-1", operation)
+
+    assert retried.state == "COMPLETED"
+    assert retried.result == "success"
+    assert calls == 2
+
+
+def test_retry_count_survives_restart(tmp_path: Path):
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal)
+
+    with pytest.raises(RuntimeError, match="first failure"):
+        runtime.execute(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("first failure")),
+        )
+
+    with pytest.raises(RuntimeError, match="second failure"):
+        runtime.retry(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("second failure")),
+        )
+
+    restarted = LocalDurableRuntime(journal)
+
+    record = restarted.get_execution("exec-1")
+
+    assert record is not None
+    assert record.state == "FAILED"
+    assert record.retry_count == 1
+    assert record.error == "second failure"
+
+
+def test_retry_after_restart_continues_retry_count(
+    tmp_path: Path,
+):
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal)
+
+    with pytest.raises(RuntimeError):
+        runtime.execute(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("first failure")),
+        )
+
+    with pytest.raises(RuntimeError):
+        runtime.retry(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("second failure")),
+        )
+
+    restarted = LocalDurableRuntime(journal)
+
+    recovered = restarted.retry(
+        "exec-1",
+        lambda: "success-after-restart",
+    )
+
+    assert recovered.state == "COMPLETED"
+    assert recovered.result == "success-after-restart"
+    assert recovered.retry_count == 2
+
+
+def test_retry_limit_is_enforced(tmp_path: Path):
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal, max_retries=1)
+
+    with pytest.raises(RuntimeError, match="first failure"):
+        runtime.execute(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("first failure")),
+        )
+
+    with pytest.raises(RuntimeError, match="second failure"):
+        runtime.retry(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("second failure")),
+        )
+
+    record = runtime.get_execution("exec-1")
+    assert record is not None
+    assert record.state == "FAILED"
+    assert record.retry_count == 1
+
+    with pytest.raises(RuntimeError, match="Retry limit exhausted"):
+        runtime.retry(
+            "exec-1",
+            lambda: "must-not-run",
+        )
+
+
+def test_retry_limit_survives_restart(tmp_path: Path):
+    journal = tmp_path / "runtime.jsonl"
+
+    runtime = LocalDurableRuntime(journal, max_retries=1)
+
+    with pytest.raises(RuntimeError):
+        runtime.execute(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("first failure")),
+        )
+
+    with pytest.raises(RuntimeError):
+        runtime.retry(
+            "exec-1",
+            lambda: (_ for _ in ()).throw(RuntimeError("second failure")),
+        )
+
+    restarted = LocalDurableRuntime(journal, max_retries=1)
+
+    with pytest.raises(RuntimeError, match="Retry limit exhausted"):
+        restarted.retry(
+            "exec-1",
+            lambda: "must-not-run",
+        )
+
+
+def test_negative_retry_limit_is_rejected(tmp_path: Path):
+    journal = tmp_path / "runtime.jsonl"
+
+    with pytest.raises(ValueError, match="max_retries must be >= 0"):
+        LocalDurableRuntime(journal, max_retries=-1)

@@ -16,6 +16,7 @@ class DurableRecord:
     state: str
     result: object | None = None
     error: str | None = None
+    retry_count: int = 0
     sequence: int = 0
 
 
@@ -31,8 +32,16 @@ class LocalDurableRuntime:
     records after process restart.
     """
 
-    def __init__(self, journal_path: str | Path) -> None:
+    def __init__(
+        self,
+        journal_path: str | Path,
+        max_retries: int = 3,
+    ) -> None:
+        if max_retries < 0:
+            raise ValueError("max_retries must be >= 0")
+
         self._path = Path(journal_path)
+        self._max_retries = max_retries
         self._lock = RLock()
         self._records: dict[str, DurableRecord] = {}
         self._next_sequence = 1
@@ -114,6 +123,66 @@ class LocalDurableRuntime:
                 if record.state == "STARTED"
             )
 
+    def retry(
+        self,
+        execution_id: str,
+        operation: Callable[[], T],
+    ) -> DurableRecord:
+        with self._lock:
+            existing = self._records.get(execution_id)
+
+            if existing is None:
+                raise KeyError(f"Unknown execution: {execution_id}")
+
+            if existing.state == "COMPLETED":
+                return existing
+
+            if existing.state == "CANCELLED":
+                return existing
+
+            if existing.state != "FAILED":
+                raise RuntimeError(
+                    f"Execution is not retryable: {execution_id}"
+                )
+
+            if existing.retry_count >= self._max_retries:
+                raise RuntimeError(
+                    f"Retry limit exhausted: {execution_id}"
+                )
+
+            retry_count = existing.retry_count + 1
+
+            self._append(
+                DurableRecord(
+                    execution_id=execution_id,
+                    state="STARTED",
+                    retry_count=retry_count,
+                )
+            )
+
+            try:
+                result = operation()
+            except Exception as exc:
+                self._append(
+                    DurableRecord(
+                        execution_id=execution_id,
+                        state="FAILED",
+                        error=str(exc),
+                        retry_count=retry_count,
+                    )
+                )
+                raise
+
+            self._append(
+                DurableRecord(
+                    execution_id=execution_id,
+                    state="COMPLETED",
+                    result=result,
+                    retry_count=retry_count,
+                )
+            )
+            return self._records[execution_id]
+
     def recover(
         self,
         execution_id: str,
@@ -184,6 +253,7 @@ class LocalDurableRuntime:
             "state": record.state,
             "result": record.result,
             "error": record.error,
+            "retry_count": record.retry_count,
             "sequence": sequence,
         }
 
@@ -198,6 +268,7 @@ class LocalDurableRuntime:
             state=record.state,
             result=record.result,
             error=record.error,
+            retry_count=record.retry_count,
             sequence=sequence,
         )
 
@@ -220,6 +291,7 @@ class LocalDurableRuntime:
                     state=entry["state"],
                     result=entry.get("result"),
                     error=entry.get("error"),
+                    retry_count=entry.get("retry_count", 0),
                     sequence=entry["sequence"],
                 )
 
