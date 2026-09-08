@@ -1,4 +1,5 @@
 from vajra.recovery.classifier import FailureClassifier
+from vajra.recovery.coordinator import RecoveryCoordinator, RecoveryOutcome
 from vajra.recovery.policy import RecoveryDecision, RecoveryPolicy
 from vajra.recovery.contracts import (
     Failure,
@@ -15,4 +16,6 @@ __all__ = [
     "RecoveryAction",
     "RecoveryDecision",
     "RecoveryPolicy",
+    "RecoveryCoordinator",
+    "RecoveryOutcome",
 ]
