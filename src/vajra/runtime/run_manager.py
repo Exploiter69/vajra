@@ -18,6 +18,7 @@ from vajra.domain import (
 )
 
 from vajra.runtime.event_store import EventStore, InMemoryEventStore
+from vajra.runtime.lease import LeaseManager, WorkerLease
 from vajra.runtime.state_store import InMemoryStateStore, StateStore
 
 
@@ -49,6 +50,7 @@ class RunManager:
         self._state_store = state_store or InMemoryStateStore()
         self._event_store = event_store or InMemoryEventStore()
         self._lock = RLock()
+        self._lease_manager = LeaseManager()
 
     def create_run(self, run: EngineeringRun) -> EngineeringRun:
         with self._lock:
@@ -133,6 +135,9 @@ class RunManager:
         attempt_id: str,
         worker_id: str,
         lease_id: str,
+        *,
+        lease_ttl_seconds: int = 60,
+        now: datetime | None = None,
     ) -> Attempt:
         with self._lock:
             run = self.get_run(run_id)
@@ -145,13 +150,22 @@ class RunManager:
             ):
                 raise ValueError(f"Attempt already exists: {attempt_id}")
 
+            lease = self._lease_manager.acquire(
+                attempt_id,
+                worker_id,
+                lease_id,
+                lease_ttl_seconds,
+                now=now,
+            )
+
             attempt = Attempt(
                 attempt_id=attempt_id,
                 step_id=step_id,
                 run_id=run_id,
                 state=AttemptState.RUNNING,
                 worker_id=worker_id,
-                lease_id=lease_id,
+                lease_id=lease.lease_id,
+                lease_expiry=lease.lease_expiry,
             )
 
             step.attempts.append(attempt)
@@ -166,13 +180,28 @@ class RunManager:
                     step_id=step_id,
                     attempt_id=attempt_id,
                     worker_id=worker_id,
-                    payload={"lease_id": lease_id},
+                    payload={
+                        "lease_id": lease.lease_id,
+                        "fencing_token": lease.fencing_token,
+                        "lease_expiry": lease.lease_expiry.isoformat(),
+                    },
                 )
 
                 return attempt
             except Exception:
                 self._state_store.save_run(previous)
+                self._lease_manager.release(
+                    attempt_id,
+                    worker_id,
+                    lease.lease_id,
+                    lease.fencing_token,
+                    now=now,
+                )
                 raise
+
+    def get_lease(self, attempt_id: str) -> WorkerLease | None:
+        with self._lock:
+            return self._lease_manager.get(attempt_id)
 
     def fail_attempt(
         self,

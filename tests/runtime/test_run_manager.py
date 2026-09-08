@@ -210,3 +210,76 @@ def test_event_contains_lifecycle_correlation_data() -> None:
     assert attempt_event.attempt_id == "attempt-1"
     assert attempt_event.worker_id == "worker-1"
     assert attempt_event.payload["lease_id"] == "lease-1"
+
+
+def test_start_attempt_creates_and_persists_worker_lease():
+    from datetime import datetime, timezone
+
+    manager = RunManager()
+    run = manager.create_run(make_run())
+    manager.add_step(run.run_id, "step-1", "implementation")
+
+    attempt = manager.start_attempt(
+        run.run_id,
+        "step-1",
+        "attempt-1",
+        "worker-1",
+        "lease-1",
+        lease_ttl_seconds=60,
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+    lease = manager.get_lease("attempt-1")
+
+    assert attempt.worker_id == "worker-1"
+    assert attempt.lease_id == "lease-1"
+    assert attempt.lease_expiry == lease.lease_expiry
+    assert lease.worker_id == "worker-1"
+    assert lease.lease_id == "lease-1"
+    assert lease.fencing_token == 1
+
+
+def test_start_attempt_records_fencing_information():
+    from datetime import datetime, timezone
+
+    manager = RunManager()
+    run = manager.create_run(make_run())
+    manager.add_step(run.run_id, "step-1", "implementation")
+
+    manager.start_attempt(
+        run.run_id,
+        "step-1",
+        "attempt-1",
+        "worker-1",
+        "lease-1",
+        lease_ttl_seconds=30,
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+    event = manager.events(run.run_id)[-1]
+
+    assert event.event_type == "ATTEMPT_STARTED"
+    assert event.payload["lease_id"] == "lease-1"
+    assert event.payload["fencing_token"] == 1
+    assert event.payload["lease_expiry"] == (
+        "2026-01-01T00:00:30+00:00"
+    )
+
+
+def test_start_attempt_rejects_invalid_lease_ttl():
+    from datetime import datetime, timezone
+
+    manager = RunManager()
+    run = manager.create_run(make_run())
+    manager.add_step(run.run_id, "step-1", "implementation")
+
+    with pytest.raises(ValueError, match="ttl_seconds"):
+        manager.start_attempt(
+            run.run_id,
+            "step-1",
+            "attempt-1",
+            "worker-1",
+            "lease-1",
+            lease_ttl_seconds=0,
+            now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
