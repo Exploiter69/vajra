@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from pathlib import Path
-from threading import RLock
+from threading import Condition, RLock
 from typing import Callable, TypeVar
 
 
@@ -54,6 +54,8 @@ class LocalDurableRuntime:
         self._lock = RLock()
         self._records: dict[str, DurableRecord] = {}
         self._timers: dict[str, DurableTimer] = {}
+        self._active_executions: set[str] = set()
+        self._conditions: dict[str, Condition] = {}
         self._next_sequence = 1
         self._load()
 
@@ -73,9 +75,34 @@ class LocalDurableRuntime:
                     return existing
 
                 if existing.state == "STARTED":
-                    raise RuntimeError(
-                        f"Execution requires recovery: {execution_id}"
+                    if execution_id not in self._active_executions:
+                        raise RuntimeError(
+                            f"Execution requires recovery: {execution_id}"
+                        )
+
+                    condition = self._conditions.setdefault(
+                        execution_id,
+                        Condition(self._lock),
                     )
+
+                    while True:
+                        current = self._records[execution_id]
+
+                        if current.state != "STARTED":
+                            if current.state == "COMPLETED":
+                                return current
+
+                            if current.state == "CANCELLED":
+                                return current
+
+                            raise RuntimeError(
+                                current.error
+                                or f"Execution failed: {execution_id}"
+                            )
+
+                        condition.wait()
+
+                    # Unreachable; terminal states return above.
 
             self._append(
                 DurableRecord(
@@ -84,9 +111,16 @@ class LocalDurableRuntime:
                 )
             )
 
-            try:
-                result = operation()
-            except Exception as exc:
+            self._active_executions.add(execution_id)
+            self._conditions.setdefault(
+                execution_id,
+                Condition(self._lock),
+            )
+
+        try:
+            result = operation()
+        except Exception as exc:
+            with self._lock:
                 self._append(
                     DurableRecord(
                         execution_id=execution_id,
@@ -94,14 +128,20 @@ class LocalDurableRuntime:
                         error=str(exc),
                     )
                 )
-                raise
+                self._active_executions.discard(execution_id)
+                self._conditions[execution_id].notify_all()
+            raise
 
-            record = DurableRecord(
-                execution_id=execution_id,
-                state="COMPLETED",
-                result=result,
+        with self._lock:
+            self._append(
+                DurableRecord(
+                    execution_id=execution_id,
+                    state="COMPLETED",
+                    result=result,
+                )
             )
-            self._append(record)
+            self._active_executions.discard(execution_id)
+            self._conditions[execution_id].notify_all()
             return self._records[execution_id]
 
     def get_execution(
@@ -386,38 +426,79 @@ class LocalDurableRuntime:
         if not self._path.exists():
             return
 
+        expected_sequence = 1
+        last_sequence = 0
+
         with self._path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if not line.strip():
-                    continue
+            lines = handle.readlines()
 
+        for index, line in enumerate(lines):
+            if not line.strip():
+                continue
+
+            is_final_line = index == len(lines) - 1
+            has_newline = line.endswith("\n")
+
+            try:
                 entry = json.loads(line)
+            except json.JSONDecodeError as exc:
+                if is_final_line and not has_newline:
+                    # A process may crash while appending the final JSONL
+                    # record. An incomplete final record is not durable and
+                    # is therefore ignored during replay.
+                    break
 
-                if entry.get("type") == "timer":
+                raise ValueError(
+                    f"Invalid journal record at line {index + 1}: {exc}"
+                ) from exc
+
+            sequence = entry.get("sequence")
+
+            if not isinstance(sequence, int) or sequence < 1:
+                raise ValueError(
+                    f"Invalid journal sequence at line {index + 1}: "
+                    f"{sequence!r}"
+                )
+
+            if sequence != expected_sequence:
+                raise ValueError(
+                    f"Invalid journal sequence at line {index + 1}: "
+                    f"expected {expected_sequence}, got {sequence}"
+                )
+
+            if entry.get("type") == "timer":
+                try:
                     timer = DurableTimer(
                         timer_id=entry["timer_id"],
                         due_at=entry["due_at"],
                         state=entry["state"],
-                        sequence=entry["sequence"],
+                        sequence=sequence,
                     )
-                    self._timers[timer.timer_id] = timer
-                    self._next_sequence = max(
-                        self._next_sequence,
-                        timer.sequence + 1,
-                    )
-                    continue
+                except (KeyError, TypeError) as exc:
+                    raise ValueError(
+                        f"Invalid journal timer at line {index + 1}"
+                    ) from exc
 
-                record = DurableRecord(
-                    execution_id=entry["execution_id"],
-                    state=entry["state"],
-                    result=entry.get("result"),
-                    error=entry.get("error"),
-                    retry_count=entry.get("retry_count", 0),
-                    sequence=entry["sequence"],
-                )
+                self._timers[timer.timer_id] = timer
+
+            else:
+                try:
+                    record = DurableRecord(
+                        execution_id=entry["execution_id"],
+                        state=entry["state"],
+                        result=entry.get("result"),
+                        error=entry.get("error"),
+                        retry_count=entry.get("retry_count", 0),
+                        sequence=sequence,
+                    )
+                except (KeyError, TypeError) as exc:
+                    raise ValueError(
+                        f"Invalid journal record at line {index + 1}"
+                    ) from exc
 
                 self._records[record.execution_id] = record
-                self._next_sequence = max(
-                    self._next_sequence,
-                    record.sequence + 1,
-                )
+
+            last_sequence = sequence
+            expected_sequence += 1
+
+        self._next_sequence = last_sequence + 1

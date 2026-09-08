@@ -546,3 +546,212 @@ def test_duplicate_timer_schedule_is_idempotent(tmp_path: Path):
 
     assert second == first
     assert second.sequence == first.sequence
+
+
+def test_concurrent_execute_same_id_runs_operation_once(tmp_path: Path):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Event
+
+    journal = tmp_path / "runtime.jsonl"
+    runtime = LocalDurableRuntime(journal)
+
+    operation_started = Event()
+    release_operation = Event()
+    calls = 0
+
+    def operation():
+        nonlocal calls
+        calls += 1
+        operation_started.set()
+        assert release_operation.wait(timeout=2)
+        return "shared-result"
+
+    def invoke():
+        return runtime.execute("exec-1", operation)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(invoke)
+
+        assert operation_started.wait(timeout=2)
+
+        second = pool.submit(invoke)
+
+        # The second caller must be able to enter execute() while the
+        # first operation is still running. It must wait for the
+        # already-active execution rather than run the operation again.
+        release_operation.set()
+
+        results = [
+            first.result(timeout=5),
+            second.result(timeout=5),
+        ]
+
+    assert calls == 1
+    assert all(result.state == "COMPLETED" for result in results)
+    assert all(result.result == "shared-result" for result in results)
+    assert results[0].sequence == results[1].sequence
+
+
+def test_replay_rejects_sequence_gap(tmp_path: Path):
+    import json
+
+    journal = tmp_path / "runtime.jsonl"
+
+    journal.write_text(
+        json.dumps(
+            {
+                "execution_id": "exec-1",
+                "state": "STARTED",
+                "result": None,
+                "error": None,
+                "retry_count": 0,
+                "sequence": 1,
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "execution_id": "exec-1",
+                "state": "COMPLETED",
+                "result": "done",
+                "error": None,
+                "retry_count": 0,
+                "sequence": 3,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="sequence"):
+        LocalDurableRuntime(journal)
+
+
+def test_replay_rejects_duplicate_sequence(tmp_path: Path):
+    import json
+
+    journal = tmp_path / "runtime.jsonl"
+
+    entry = {
+        "execution_id": "exec-1",
+        "state": "STARTED",
+        "result": None,
+        "error": None,
+        "retry_count": 0,
+        "sequence": 1,
+    }
+
+    journal.write_text(
+        json.dumps(entry)
+        + "\n"
+        + json.dumps(
+            {
+                **entry,
+                "state": "COMPLETED",
+                "result": "done",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="sequence"):
+        LocalDurableRuntime(journal)
+
+
+def test_replay_rejects_malformed_complete_record(tmp_path: Path):
+    journal = tmp_path / "runtime.jsonl"
+
+    journal.write_text(
+        '{"execution_id":"exec-1","state":"STARTED","sequence":1}\n'
+        '{"execution_id":"exec-1","state":"COMPLETED","sequence":2\n\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="journal"):
+        LocalDurableRuntime(journal)
+
+
+def test_replay_ignores_truncated_final_record(tmp_path: Path):
+    import json
+
+    journal = tmp_path / "runtime.jsonl"
+
+    valid = {
+        "execution_id": "exec-1",
+        "state": "STARTED",
+        "result": None,
+        "error": None,
+        "retry_count": 0,
+        "sequence": 1,
+    }
+
+    truncated = (
+        '{"execution_id":"exec-2","state":"STARTED",'
+        '"result":null,"error":null,"retry_count":0,"sequence":2'
+    )
+
+    journal.write_text(
+        json.dumps(valid) + "\n" + truncated,
+        encoding="utf-8",
+    )
+
+    runtime = LocalDurableRuntime(journal)
+
+    record = runtime.get_execution("exec-1")
+
+    assert record is not None
+    assert record.state == "STARTED"
+    assert runtime.get_execution("exec-2") is None
+
+    recovered = runtime.recover(
+        "exec-1",
+        lambda: "recovered",
+    )
+
+    assert recovered.state == "COMPLETED"
+    assert recovered.result == "recovered"
+
+
+def test_replay_preserves_last_durable_state_before_truncated_tail(
+    tmp_path: Path,
+):
+    import json
+
+    journal = tmp_path / "runtime.jsonl"
+
+    durable_completed = {
+        "execution_id": "exec-1",
+        "state": "COMPLETED",
+        "result": "durable-result",
+        "error": None,
+        "retry_count": 2,
+        "sequence": 1,
+    }
+
+    truncated = (
+        '{"execution_id":"exec-2","state":"STARTED",'
+        '"result":null,"error":null,"retry_count":3,"sequence":2'
+    )
+
+    journal.write_text(
+        json.dumps(durable_completed) + "\n" + truncated,
+        encoding="utf-8",
+    )
+
+    runtime = LocalDurableRuntime(journal)
+
+    record = runtime.get_execution("exec-1")
+
+    assert record is not None
+    assert record.state == "COMPLETED"
+    assert record.result == "durable-result"
+    assert record.retry_count == 2
+    assert record.sequence == 1
+
+    assert runtime.get_execution("exec-2") is None
+
+    next_result = runtime.start_execution("exec-3")
+
+    assert next_result.state == "STARTED"
+    assert next_result.sequence == 2
