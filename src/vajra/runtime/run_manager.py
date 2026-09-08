@@ -10,6 +10,7 @@ from vajra.domain import (
     Attempt,
     AttemptState,
     EngineeringRun,
+    FinalDisposition,
     Event,
     RunState,
     Step,
@@ -89,6 +90,33 @@ class RunManager:
                         "from": previous_state.value,
                         "to": target.value,
                     },
+                )
+
+                return result
+            except Exception:
+                self._state_store.save_run(previous)
+                raise
+
+    def abort_run(self, run_id: str, reason: str) -> EngineeringRun:
+        with self._lock:
+            run = self.get_run(run_id)
+            previous = deepcopy(run)
+
+            if run.state is not RunState.RECOVERING:
+                raise ValueError(
+                    f"Run is not recovering: {run_id}"
+                )
+
+            transition_run(run, RunState.ABORTED)
+            run.final_disposition = FinalDisposition.ABORTED
+
+            try:
+                result = self._state_store.save_run(run)
+
+                self._record_event(
+                    run_id=run_id,
+                    event_type="RUN_ABORTED",
+                    payload={"reason": reason},
                 )
 
                 return result
