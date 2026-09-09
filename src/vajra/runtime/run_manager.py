@@ -227,6 +227,11 @@ class RunManager:
                 )
                 raise
 
+    @property
+    def lease_manager(self) -> LeaseManager:
+        """Return the Oracle-owned lease/fencing authority."""
+        return self._lease_manager
+
     def get_lease(self, attempt_id: str) -> WorkerLease | None:
         with self._lock:
             return self._lease_manager.get(attempt_id)

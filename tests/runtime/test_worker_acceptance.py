@@ -434,3 +434,70 @@ def test_lease_release_failure_does_not_roll_back_accepted_result():
         "WORKER_RESULT_ACCEPTED"
     )
     assert replacement_manager.get("attempt-1") == lease
+
+
+def test_oracle_lease_authority_rejects_stale_worker_after_takeover():
+    state_store = InMemoryStateStore()
+    event_store = InMemoryEventStore()
+
+    from vajra.runtime.run_manager import RunManager
+
+    manager = RunManager(state_store, event_store)
+
+    run = make_run()
+    manager.create_run(run)
+    manager.add_step("run-1", "step-1", "coding")
+
+    manager.start_attempt(
+        "run-1",
+        "step-1",
+        "attempt-1",
+        "worker-1",
+        "lease-1",
+        lease_ttl_seconds=60,
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+    first_lease = manager.get_lease("attempt-1")
+    assert first_lease is not None
+
+    identity = WorkerExecutionIdentity(
+        run_id="run-1",
+        step_id="step-1",
+        attempt_id="attempt-1",
+        worker_id="worker-1",
+        lease_id="lease-1",
+        fencing_token=first_lease.fencing_token,
+    )
+
+    replacement = manager.lease_manager.acquire(
+        "attempt-1",
+        "worker-2",
+        "lease-2",
+        ttl_seconds=60,
+        now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+
+    acceptor = WorkerResultAcceptor(
+        manager.lease_manager,
+        state_store,
+        event_store,
+    )
+
+    before = state_store.get_run("run-1")
+    before_events = event_store.list_for_run("run-1")
+
+    with pytest.raises(PermissionError):
+        acceptor.accept(
+            identity,
+            WorkerResult(status="SUCCEEDED"),
+            now=datetime(2026, 1, 1, 0, 0, 5, tzinfo=timezone.utc),
+        )
+
+    after = state_store.get_run("run-1")
+
+    assert after.steps[0].attempts[0].state is AttemptState.RUNNING
+    assert after.steps[0].attempts[0].lease_id == "lease-1"
+    assert after.artifacts == before.artifacts
+    assert event_store.list_for_run("run-1") == before_events
+    assert manager.get_lease("attempt-1") == replacement
