@@ -20,6 +20,7 @@ class WorkerJob:
     budget: dict[str, Any]
     deadline: str
     expected_output_schema: dict[str, Any]
+    correlation_id: str | None = None
 
     def __post_init__(self) -> None:
         for field_name in (
@@ -41,6 +42,7 @@ class WorkerResult:
     """
 
     status: str
+    correlation_id: str | None = None
     structured_result: dict[str, Any] | None = None
     artifacts: tuple[ArtifactRef, ...] = ()
     logs: tuple[str, ...] = ()

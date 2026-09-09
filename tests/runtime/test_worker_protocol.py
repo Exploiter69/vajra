@@ -9,6 +9,7 @@ def make_job() -> WorkerJob:
         run_id="run-001",
         step_id="step-001",
         attempt_id="attempt-001",
+        correlation_id="corr-001",
         repository_revision="abc123",
         workspace_contract={"workspace_id": "ws-001"},
         context_bundle={"objective": "implement feature"},
@@ -25,6 +26,7 @@ def test_worker_job_contains_bounded_execution_context():
     assert job.run_id == "run-001"
     assert job.step_id == "step-001"
     assert job.attempt_id == "attempt-001"
+    assert job.correlation_id == "corr-001"
     assert job.repository_revision == "abc123"
     assert job.workspace_contract["workspace_id"] == "ws-001"
     assert job.context_bundle["objective"] == "implement feature"
@@ -64,6 +66,7 @@ def test_worker_result_contains_reported_outcome():
 
     result = WorkerResult(
         status="SUCCEEDED",
+        correlation_id="corr-001",
         structured_result={"summary": "implemented"},
         artifacts=(artifact,),
         logs=("pytest passed",),

@@ -19,6 +19,7 @@ class WorkerExecutionIdentity:
     worker_id: str
     lease_id: str
     fencing_token: int
+    correlation_id: str | None = None
 
 
 class WorkerResultAcceptor:
@@ -72,6 +73,12 @@ class WorkerResultAcceptor:
 
         if attempt.worker_id != identity.worker_id:
             raise PermissionError("Worker does not match attempt owner")
+
+        if (
+            identity.correlation_id is not None
+            and result.correlation_id != identity.correlation_id
+        ):
+            raise PermissionError("Worker result correlation does not match attempt")
 
         if attempt.lease_id != identity.lease_id:
             raise PermissionError("Lease does not match attempt")

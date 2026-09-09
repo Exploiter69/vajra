@@ -86,7 +86,7 @@ def test_accept_successful_worker_result():
 
     result = acceptor.accept(
         identity,
-        WorkerResult(status="SUCCEEDED"),
+        WorkerResult(status="SUCCEEDED", correlation_id="corr-001"),
         now=datetime(2026, 1, 1, 0, 0, 10, tzinfo=timezone.utc),
     )
 
@@ -117,6 +117,50 @@ def test_accept_failed_worker_result():
     assert event_store.list_for_run("run-1")[-1].event_type == (
         "WORKER_RESULT_FAILED"
     )
+
+
+def test_mismatched_worker_result_correlation_cannot_mutate_state():
+    (
+        state_store,
+        event_store,
+        lease_manager,
+        acceptor,
+        identity,
+    ) = setup()
+
+    before = state_store.get_run("run-1")
+    before_events = event_store.list_for_run("run-1")
+
+    identity = WorkerExecutionIdentity(
+        run_id=identity.run_id,
+        step_id=identity.step_id,
+        attempt_id=identity.attempt_id,
+        worker_id=identity.worker_id,
+        lease_id=identity.lease_id,
+        fencing_token=identity.fencing_token,
+        correlation_id="corr-001",
+    )
+
+    with pytest.raises(
+        PermissionError,
+        match="correlation",
+    ):
+        acceptor.accept(
+            identity,
+            WorkerResult(
+                status="SUCCEEDED",
+                correlation_id="corr-002",
+            ),
+            now=datetime(2026, 1, 1, 0, 0, 10, tzinfo=timezone.utc),
+        )
+
+    after = state_store.get_run("run-1")
+
+    assert after.steps[0].attempts[0].state is AttemptState.RUNNING
+    assert after.steps[0].attempts[0].lease_id == before.steps[0].attempts[0].lease_id
+    assert event_store.list_for_run("run-1") == before_events
+    assert after.artifacts == before.artifacts
+    assert event_store.list_for_run("run-1") == event_store.list_for_run("run-1")
 
 
 def test_stale_worker_result_cannot_mutate_canonical_state():
