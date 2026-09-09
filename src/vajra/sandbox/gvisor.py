@@ -83,6 +83,31 @@ class GVisorSandbox:
         if not spec.network_enabled:
             docker_command.extend(["--network", "none"])
 
+        resource_flags = {
+            "memory": "--memory",
+            "memory_swap": "--memory-swap",
+            "cpus": "--cpus",
+            "pids_limit": "--pids-limit",
+        }
+
+        unknown_limits = set(spec.resource_limits) - set(resource_flags)
+        if unknown_limits:
+            return self._rejected(
+                operation,
+                "Unsupported resource limits: "
+                + ", ".join(sorted(unknown_limits)),
+            )
+
+        for name, flag in resource_flags.items():
+            if name in spec.resource_limits:
+                value = spec.resource_limits[name]
+                if not isinstance(value, (str, int, float)) or isinstance(value, bool):
+                    return self._rejected(
+                        operation,
+                        f"resource limit must be scalar: {name}",
+                    )
+                docker_command.extend([flag, str(value)])
+
         docker_command.extend([
             "-v",
             f"{workspace_path}:/workspace:rw",

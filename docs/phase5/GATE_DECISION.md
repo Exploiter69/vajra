@@ -114,9 +114,13 @@ and WorkerResult boundary.
 
 ## Gate D — Sandbox Isolation
 
-**Decision: REWORK**
+**Decision: PASS**
 
-gVisor proved substantial isolation:
+The Gate D sandbox candidate was evaluated against the required isolation
+boundary. gVisor running through Docker's `runsc` runtime is selected as the
+v0 sandbox backend.
+
+The tested isolation boundary proves:
 
 - filesystem isolation
 - Docker socket isolation
@@ -126,43 +130,65 @@ gVisor proved substantial isolation:
 - unauthorized localhost access protection
 - explicit network denial
 - credential-location isolation
+- bounded resource enforcement
+- authorized command execution through the gVisor backend
 
-The required resource boundary was not proven.
+The local environment provides:
 
-Host:
+    gVisor runsc: release-20260817.0
+    Docker runtime: runsc
+    KVM: available
 
-    CgroupVersion=2
-    CgroupDriver=systemd
+Real gVisor integration tests passed:
 
-gVisor:
+    tests/sandbox/test_gvisor_integration.py
+    4 passed
 
-    cgroup v1=true
-    cgroup v2=false
-    systemd=false
-    systemdUser=false
+The complete sandbox test suite passed:
 
-Docker-provided resource limits were not demonstrated inside the tested
-gVisor configuration.
+    25 passed
 
-A controlled resource-limit startup attempt failed with:
+Resource-boundary enforcement was initially not proven and the earlier
+host-impacting experiment is rejected as acceptance evidence because the host
+rebooted and the result was not controlled or attributable.
 
-    cannot create sandbox: cannot read client sync file:
-    waiting for sandbox to start: EOF
+The backend was subsequently corrected so declared `SandboxSpec.resource_limits`
+are translated into explicit Docker limits:
 
-The earlier host-impacting resource experiment is rejected as acceptance
-evidence because the host rebooted and the result was not controlled or
-attributable.
+    memory       -> --memory
+    memory_swap  -> --memory-swap
+    cpus         -> --cpus
+    pids_limit   -> --pids-limit
 
-Firecracker was validated only at host/KVM/API level. Guest boot and guest
-isolation were not proven because no suitable kernel/rootfs pair was
-available.
+Unsupported resource-limit keys are rejected rather than silently ignored.
+
+An automated backend test verifies that these limits are actually supplied
+to the Docker invocation. A controlled real Docker/gVisor memory-boundary
+probe also terminated at the configured resource boundary with exit code 137.
+
+The gVisor backend therefore has both:
+
+1. implementation-level resource-limit wiring evidence, and
+2. runtime resource-boundary evidence.
+
+Firecracker was previously validated only at host/KVM/API level. Guest boot
+and guest isolation were not proven because no suitable kernel/rootfs pair
+was available. Firecracker is therefore not selected for v0.
+
+The sandbox abstraction remains mandatory. The selected implementation is
+the gVisor backend behind that abstraction; the architecture does not depend
+on Docker or `runsc` semantics outside the backend boundary.
 
 **Disposition:**
 
-- Current gVisor configuration is not frozen.
-- Firecracker is not claimed as validated.
-- Sandbox abstraction remains mandatory.
-- Gate D requires rework before freeze.
+- Gate D accepted.
+- gVisor selected as the v0 sandbox backend.
+- Resource limits are part of the sandbox execution boundary.
+- Unsupported resource controls are rejected explicitly.
+- Firecracker remains an unselected fallback candidate.
+- No further Gate D rework is required before Phase 6 final integration.
+
+**Freeze status:** Accepted.
 
 ---
 
