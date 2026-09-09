@@ -114,6 +114,7 @@ def _status(manager: RunManager, args: argparse.Namespace) -> int:
     print(f"budget_id: {run.budget_id}")
     print(f"created_by: {run.created_by}")
     print(f"current_step_id: {run.current_step_id or '-'}")
+    print(f"final_disposition: {run.final_disposition.value if run.final_disposition else '-'}")
     print(f"steps: {len(run.steps)}")
 
     attempts = sum(len(step.attempts) for step in run.steps)

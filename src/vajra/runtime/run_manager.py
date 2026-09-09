@@ -102,9 +102,9 @@ class RunManager:
             run = self.get_run(run_id)
             previous = deepcopy(run)
 
-            if run.state is not RunState.RECOVERING:
+            if run.state not in {RunState.RECOVERING, RunState.WAITING_HUMAN}:
                 raise ValueError(
-                    f"Run is not recovering: {run_id}"
+                    f"Run cannot be aborted from state {run.state.value}: {run_id}"
                 )
 
             transition_run(run, RunState.ABORTED)

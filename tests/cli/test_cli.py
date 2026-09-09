@@ -289,3 +289,69 @@ def test_run_abort_rejects_non_recovering_run() -> None:
 
     assert result == 1
     assert manager.get_run("run-1").state.value == "CREATED"
+
+
+def test_status_exposes_waiting_human_state() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    from vajra.domain import RunState
+
+    manager.transition("run-1", RunState.QUEUED)
+    manager.transition("run-1", RunState.ORIENTING)
+    manager.transition("run-1", RunState.WAITING_HUMAN)
+
+    output = StringIO()
+    with redirect_stdout(output):
+        result = main(
+            ["run", "status", "run-1"],
+            manager=manager,
+        )
+
+    assert result == 0
+    text = output.getvalue()
+    assert "state: WAITING_HUMAN" in text
+    assert "final_disposition: -" in text
+
+
+def test_human_waiting_run_can_be_aborted_explicitly() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    from vajra.domain import RunState
+
+    manager.transition("run-1", RunState.QUEUED)
+    manager.transition("run-1", RunState.ORIENTING)
+    manager.transition("run-1", RunState.WAITING_HUMAN)
+
+    result = main(
+        ["run", "abort", "run-1", "human denied continuation"],
+        manager=manager,
+    )
+
+    assert result == 0
+
+    run = manager.get_run("run-1")
+    assert run.state is RunState.ABORTED
+
+
+def test_waiting_human_does_not_auto_approve() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    from vajra.domain import RunState
+
+    manager.transition("run-1", RunState.QUEUED)
+    manager.transition("run-1", RunState.ORIENTING)
+    manager.transition("run-1", RunState.WAITING_HUMAN)
+
+    output = StringIO()
+    with redirect_stdout(output):
+        result = main(
+            ["run", "status", "run-1"],
+            manager=manager,
+        )
+
+    assert result == 0
+    assert manager.get_run("run-1").state is RunState.WAITING_HUMAN
+    assert "state: WAITING_HUMAN" in output.getvalue()
