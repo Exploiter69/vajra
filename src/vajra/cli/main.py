@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 
-from vajra.domain import EngineeringRun
+from vajra.domain import EngineeringRun, RunState
 from vajra.runtime import RunManager
 
 
@@ -53,6 +53,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="show Engineering Run event history",
     )
     events_parser.add_argument("run_id")
+
+    transition_parser = run_subparsers.add_parser(
+        "transition",
+        help="transition an Engineering Run",
+    )
+    transition_parser.add_argument("run_id")
+    transition_parser.add_argument(
+        "state",
+        choices=[state.value for state in RunState],
+    )
+
+    abort_parser = run_subparsers.add_parser(
+        "abort",
+        help="abort an Engineering Run",
+    )
+    abort_parser.add_argument("run_id")
+    abort_parser.add_argument("reason")
+
+    snapshot_parser = run_subparsers.add_parser(
+        "snapshot",
+        help="show an Engineering Run snapshot",
+    )
+    snapshot_parser.add_argument("run_id")
 
     return parser
 
@@ -114,6 +137,37 @@ def _events(manager: RunManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def _transition(manager: RunManager, args: argparse.Namespace) -> int:
+    target = RunState(args.state)
+    run = manager.transition(args.run_id, target)
+
+    print(f"run_id: {run.run_id}")
+    print(f"state: {run.state.value}")
+    return 0
+
+
+def _abort(manager: RunManager, args: argparse.Namespace) -> int:
+    run = manager.abort_run(args.run_id, args.reason)
+
+    print(f"run_id: {run.run_id}")
+    print(f"state: {run.state.value}")
+    print(f"final_disposition: {run.final_disposition.value}")
+    return 0
+
+
+def _snapshot(manager: RunManager, args: argparse.Namespace) -> int:
+    snapshot = manager.snapshot(args.run_id)
+    run = snapshot.run
+
+    print(f"run_id: {run.run_id}")
+    print(f"state: {run.state.value}")
+    print(f"objective: {run.objective}")
+    print(f"steps: {len(run.steps)}")
+    print(f"attempts: {sum(len(step.attempts) for step in run.steps)}")
+
+    return 0
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -133,6 +187,15 @@ def main(
 
             if args.run_command == "events":
                 return _events(manager, args)
+
+            if args.run_command == "transition":
+                return _transition(manager, args)
+
+            if args.run_command == "abort":
+                return _abort(manager, args)
+
+            if args.run_command == "snapshot":
+                return _snapshot(manager, args)
 
         return 0
     except (KeyError, ValueError) as exc:

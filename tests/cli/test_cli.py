@@ -190,3 +190,102 @@ def test_duplicate_run_returns_clean_error() -> None:
     result = main(arguments, manager=manager)
 
     assert result == 1
+
+
+def make_cli_run(manager: RunManager, run_id: str = "run-1") -> None:
+    main(
+        [
+            "run",
+            "create",
+            run_id,
+            "Build artifact",
+            "--repository-id",
+            "repo-1",
+            "--base-revision",
+            "abc123",
+            "--acceptance",
+            "tests pass",
+            "--policy-id",
+            "default",
+            "--policy-version",
+            "1",
+            "--budget-id",
+            "budget-1",
+        ],
+        manager=manager,
+    )
+
+
+def test_run_transition_controls_lifecycle() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    result = main(
+        ["run", "transition", "run-1", "QUEUED"],
+        manager=manager,
+    )
+
+    assert result == 0
+    assert manager.get_run("run-1").state.value == "QUEUED"
+
+
+def test_run_transition_rejects_invalid_lifecycle_transition() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    result = main(
+        ["run", "transition", "run-1", "EXECUTING"],
+        manager=manager,
+    )
+
+    assert result == 1
+    assert manager.get_run("run-1").state.value == "CREATED"
+
+
+def test_run_snapshot_reads_canonical_run() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    output = StringIO()
+    with redirect_stdout(output):
+        result = main(
+            ["run", "snapshot", "run-1"],
+            manager=manager,
+        )
+
+    assert result == 0
+    text = output.getvalue()
+    assert "run_id: run-1" in text
+    assert "state: CREATED" in text
+    assert "objective: Build artifact" in text
+
+
+def test_run_abort_controls_recovering_run() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.QUEUED)
+    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.ORIENTING)
+    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.RECOVERING)
+
+    result = main(
+        ["run", "abort", "run-1", "operator requested abort"],
+        manager=manager,
+    )
+
+    assert result == 0
+    run = manager.get_run("run-1")
+    assert run.state.value == "ABORTED"
+
+
+def test_run_abort_rejects_non_recovering_run() -> None:
+    manager = RunManager()
+    make_cli_run(manager)
+
+    result = main(
+        ["run", "abort", "run-1", "operator requested abort"],
+        manager=manager,
+    )
+
+    assert result == 1
+    assert manager.get_run("run-1").state.value == "CREATED"
