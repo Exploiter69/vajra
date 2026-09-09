@@ -151,6 +151,7 @@ class WorkerResultAcceptor:
             step_id=identity.step_id,
             attempt_id=identity.attempt_id,
             worker_id=identity.worker_id,
+            correlation_id=identity.correlation_id or result.correlation_id,
             payload={
                 "status": result.status,
                 "structured_result": result.structured_result,

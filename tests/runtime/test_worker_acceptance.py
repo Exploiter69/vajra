@@ -98,6 +98,7 @@ def test_accept_successful_worker_result():
     assert event_store.list_for_run("run-1")[-1].event_type == (
         "WORKER_RESULT_ACCEPTED"
     )
+    assert event_store.list_for_run("run-1")[-1].correlation_id == "corr-001"
 
 
 def test_accept_failed_worker_result():
