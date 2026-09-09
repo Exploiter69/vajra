@@ -47,29 +47,68 @@ This is a candidate rejection, not an architectural failure.
 
 ## Gate C — Oracle → Kaggle Worker Lifecycle
 
-**Decision: BLOCKED / INCOMPLETE**
+**Decision: PASS WITH INFRASTRUCTURE LIMITATION**
 
-Kaggle-side infrastructure, Ollama, model inference, connectivity, worker
-protocol behavior, and coding-task execution were exercised.
+Gate C's control-plane lifecycle and physical worker path are now proven.
 
-The canonical Oracle-controlled lifecycle was not fully tested because the
-Oracle environment/account was unavailable.
+Deterministic lifecycle evidence proves:
 
-Unproven acceptance requirements:
+- VAJRA retains canonical Run state.
+- Worker Jobs are correlated to the correct Attempt.
+- Worker results are accepted only through lease/fencing validation.
+- Worker disappearance transitions the Run into recovery.
+- Recovery can select a replacement worker.
+- Oracle-controlled retry creates a new Attempt with a new lease/fencing identity.
+- A stale/disappeared worker cannot later mutate canonical Run state.
+- The complete lifecycle is covered by `tests/runtime/test_gate_c_worker_lifecycle.py`.
 
-- Oracle retains canonical Run state
-- worker loss does not destroy the Run
-- result is correctly correlated to Attempt
-- stale worker cannot mutate the Run
-- retry/recovery is controlled by Oracle
+Physical remote evidence also proves the real worker path:
 
-A protocol test also identified request-identity propagation as an issue:
-the disposable worker generated its own request identifier instead of
-preserving the controlling request identifier.
+    Laptop VAJRA
+        ↓
+    Cloudflare tunnel
+        ↓
+    Kaggle worker
+        ↓
+    Qwen 2.5 Coder 32B
+        ↓
+    WorkerResult
+        ↓
+    Laptop VAJRA
 
-**Disposition:** Return to Gate C when Oracle is available.
+The physical remote test returned:
 
-**Freeze status:** Not frozen.
+    status: completed
+    correlation_id: gate-c-remote-correlation-001
+    response: VAJRA REMOTE 32B OK
+    model: qwen2.5-coder:32b
+    elapsed_seconds: 1.589
+
+The HTTP worker transport and its protocol tests are committed in:
+
+    36b24d4 feat: add HTTP worker transport
+
+The remaining limitation is infrastructure availability:
+
+- No Oracle VM/control-plane host is currently available.
+- Therefore the actual Oracle-hosted deployment topology has not been
+  physically demonstrated.
+- This is an infrastructure availability limitation, not an unproven
+  VAJRA worker lifecycle behavior.
+
+The earlier request-identity propagation issue is resolved. The finalized
+protocol preserves the controlling `correlation_id` across the WorkerJob
+and WorkerResult boundary.
+
+**Disposition:**
+
+- Accept Gate C control-plane lifecycle evidence.
+- Accept the physical Kaggle/Qwen worker-path evidence.
+- Do not claim Oracle-hosted physical deployment until an Oracle environment
+  is actually available.
+- No further Gate C implementation is required before proceeding to 6K.
+
+**Freeze status:** Accepted with infrastructure limitation.
 
 ---
 
@@ -186,10 +225,13 @@ The following are accepted as architectural foundations:
 - bounded autonomy
 - ASTRA safety behavior only where proven
 
-The only remaining material blockers are:
+The remaining material blocker is:
 
-1. Gate C — complete Oracle-controlled worker lifecycle.
-2. Gate D — production sandbox/resource-boundary validation.
+1. Gate D — production sandbox/resource-boundary validation.
+
+Gate C is accepted with an infrastructure limitation: Oracle-hosted physical
+deployment remains pending because no Oracle environment is currently
+available.
 
 No completed gate should be rerun without new evidence or a changed test
 condition.
