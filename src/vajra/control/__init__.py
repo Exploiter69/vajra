@@ -12,6 +12,8 @@ from .contracts import (
     ReconciliationReport,
     WorktreeContract,
 )
+from .reality import RealityObserver, filesystem_digest, stable_digest
+from .worktree import WorktreeError, WorktreeInspection, WorktreeManager
 
 __all__ = [
     "AcceptanceCriteria",
@@ -26,4 +28,10 @@ __all__ = [
     "ReconciliationDisposition",
     "ReconciliationReport",
     "WorktreeContract",
+    "RealityObserver",
+    "filesystem_digest",
+    "stable_digest",
+    "WorktreeError",
+    "WorktreeInspection",
+    "WorktreeManager",
 ]
