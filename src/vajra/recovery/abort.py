@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from vajra.control.transition_authority import TransitionActor
 from vajra.domain import FinalDisposition, RunState
 from vajra.recovery.contracts import Failure, RecoveryAction
 from vajra.recovery.policy import RecoveryDecision
@@ -58,6 +59,7 @@ class AbortRecoveryHandler:
         self._run_manager.abort_run(
             failure.run_id,
             decision.reason,
+            TransitionActor.RECOVERY,
         )
 
         aborted = self._run_manager.get_run(failure.run_id)

@@ -19,6 +19,7 @@ from vajra.recovery.policy import RecoveryDecision
 from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
 from vajra.runtime.state_store import InMemoryStateStore
+from vajra.control.transition_authority import TransitionActor
 
 
 def make_manager() -> RunManager:
@@ -38,8 +39,8 @@ def make_manager() -> RunManager:
         budget_id="budget-1",
     )
     manager.create_run(run)
-    manager.transition("run-1", RunState.QUEUED)
-    manager.transition("run-1", RunState.ORIENTING)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.ORIENTING, TransitionActor.SYSTEM)
 
     manager.add_step(
         "run-1",
@@ -118,7 +119,7 @@ def test_retry_creates_new_attempt_with_new_worker_and_lease():
 
 def test_retry_requires_recovering_run():
     manager = make_manager()
-    manager.transition("run-1", RunState.QUEUED)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
 
     handler = RetryRecoveryHandler(manager)
 

@@ -4,6 +4,7 @@ from vajra.domain import EngineeringRun, RunState
 from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
 from vajra.runtime.state_store import InMemoryStateStore
+from vajra.control.transition_authority import TransitionActor
 
 
 class FailingEventStore(InMemoryEventStore):
@@ -48,7 +49,7 @@ def test_transition_does_not_hide_event_persistence_failure():
     manager.create_run(run)
 
     with pytest.raises(RuntimeError, match="event persistence failed"):
-        manager.transition("atomicity-run", RunState.QUEUED)
+        manager.transition("atomicity-run", RunState.QUEUED, TransitionActor.SYSTEM)
 
     # State must roll back when the lifecycle event cannot be persisted.
     assert manager.get_run("atomicity-run").state is RunState.CREATED
@@ -68,7 +69,7 @@ def test_state_persistence_failure_prevents_event_creation():
     state_store.fail_save = True
 
     with pytest.raises(RuntimeError, match="state persistence failed"):
-        manager.transition("atomicity-run", RunState.QUEUED)
+        manager.transition("atomicity-run", RunState.QUEUED, TransitionActor.SYSTEM)
 
     assert event_store.list_for_run("atomicity-run") == (
         event_store.list_for_run("atomicity-run")[0],

@@ -29,6 +29,7 @@ from vajra.runtime.worker_lifecycle import (
     WorkerDisappearanceDetector,
 )
 from vajra.runtime.worker_protocol import WorkerJob, WorkerResult
+from vajra.control.transition_authority import TransitionActor
 
 
 NOW = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
@@ -54,10 +55,10 @@ def make_manager() -> RunManager:
     )
 
     manager.create_run(run)
-    manager.transition("gate-c-run", RunState.QUEUED)
-    manager.transition("gate-c-run", RunState.ORIENTING)
-    manager.transition("gate-c-run", RunState.PLANNING)
-    manager.transition("gate-c-run", RunState.EXECUTING)
+    manager.transition("gate-c-run", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("gate-c-run", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("gate-c-run", RunState.PLANNING, TransitionActor.SYSTEM)
+    manager.transition("gate-c-run", RunState.EXECUTING, TransitionActor.SYSTEM)
     manager.add_step("gate-c-run", "step-1", "implementation")
 
     manager.start_attempt(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from vajra.control.transition_authority import TransitionActor
 from vajra.domain import RunState
 from vajra.recovery.contracts import Failure, RecoveryAction
 from vajra.recovery.policy import RecoveryDecision
@@ -58,6 +59,8 @@ class RequestHumanRecoveryHandler:
         self._run_manager.transition(
             failure.run_id,
             RunState.WAITING_HUMAN,
+            TransitionActor.HUMAN,
+            reason=decision.reason,
         )
 
         return HumanApprovalRequest(

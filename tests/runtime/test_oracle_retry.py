@@ -11,6 +11,7 @@ from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.oracle_retry import OracleRetryCoordinator, OracleRetryRequest
 from vajra.runtime.run_manager import RunManager
 from vajra.runtime.state_store import InMemoryStateStore
+from vajra.control.transition_authority import TransitionActor
 
 
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -36,10 +37,10 @@ def make_manager() -> RunManager:
     )
 
     manager.create_run(run)
-    manager.transition("run-1", RunState.QUEUED)
-    manager.transition("run-1", RunState.ORIENTING)
-    manager.transition("run-1", RunState.PLANNING)
-    manager.transition("run-1", RunState.EXECUTING)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.PLANNING, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.EXECUTING, TransitionActor.SYSTEM)
     manager.add_step("run-1", "step-1", "implementation")
 
     manager.start_attempt(

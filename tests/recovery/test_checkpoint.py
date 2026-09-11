@@ -16,6 +16,7 @@ from vajra.recovery.policy import RecoveryDecision
 from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
 from vajra.runtime.state_store import InMemoryStateStore
+from vajra.control.transition_authority import TransitionActor
 
 
 def make_manager() -> RunManager:
@@ -36,8 +37,8 @@ def make_manager() -> RunManager:
     )
 
     manager.create_run(run)
-    manager.transition("run-1", RunState.QUEUED)
-    manager.transition("run-1", RunState.ORIENTING)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.ORIENTING, TransitionActor.SYSTEM)
     manager.recover_run("run-1")
 
     return manager
@@ -111,7 +112,7 @@ def test_delegates_checkpoint_restore():
 
 def test_requires_recovering_run():
     manager = make_manager()
-    manager.transition("run-1", RunState.QUEUED)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
 
     checkpoint = make_checkpoint()
 

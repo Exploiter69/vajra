@@ -6,6 +6,7 @@ from vajra.domain import EngineeringRun, RunState, AttemptState
 from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
 from vajra.runtime.state_store import InMemoryStateStore
+from vajra.control.transition_authority import TransitionActor
 from vajra.runtime.worker_lifecycle import (
     WorkerDisappearance,
     WorkerDisappearanceDetector,
@@ -34,10 +35,10 @@ def make_manager():
     )
 
     manager.create_run(run)
-    manager.transition(run.run_id, RunState.QUEUED)
-    manager.transition(run.run_id, RunState.ORIENTING)
-    manager.transition(run.run_id, RunState.PLANNING)
-    manager.transition(run.run_id, RunState.EXECUTING)
+    manager.transition(run.run_id, RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition(run.run_id, RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition(run.run_id, RunState.PLANNING, TransitionActor.SYSTEM)
+    manager.transition(run.run_id, RunState.EXECUTING, TransitionActor.SYSTEM)
     manager.add_step(run.run_id, "step-1", "implementation")
     manager.start_attempt(
         run.run_id,

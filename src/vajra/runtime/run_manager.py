@@ -18,6 +18,10 @@ from vajra.domain import (
     transition_run,
 )
 
+from vajra.control.transition_authority import (
+    TransitionActor,
+    TransitionAuthority,
+)
 from vajra.runtime.event_store import EventStore, InMemoryEventStore
 from vajra.runtime.lease import LeaseManager, WorkerLease
 from vajra.runtime.state_store import InMemoryStateStore, StateStore
@@ -52,6 +56,7 @@ class RunManager:
         self._event_store = event_store or InMemoryEventStore()
         self._lock = RLock()
         self._lease_manager = LeaseManager()
+        self._transition_authority = TransitionAuthority()
 
     def create_run(self, run: EngineeringRun) -> EngineeringRun:
         with self._lock:
@@ -72,10 +77,24 @@ class RunManager:
         with self._lock:
             return self._state_store.get_run(run_id)
 
-    def transition(self, run_id: str, target: RunState) -> EngineeringRun:
+    def transition(
+        self,
+        run_id: str,
+        target: RunState,
+        actor: TransitionActor,
+        *,
+        reason: str = "",
+    ) -> EngineeringRun:
         with self._lock:
             run = self.get_run(run_id)
             previous = deepcopy(run)
+
+            self._transition_authority.assert_authorized(
+                run,
+                target,
+                actor,
+                reason=reason,
+            )
 
             previous_state = run.state
             transition_run(run, target)
@@ -97,7 +116,12 @@ class RunManager:
                 self._state_store.save_run(previous)
                 raise
 
-    def abort_run(self, run_id: str, reason: str) -> EngineeringRun:
+    def abort_run(
+        self,
+        run_id: str,
+        reason: str,
+        actor: TransitionActor,
+    ) -> EngineeringRun:
         with self._lock:
             run = self.get_run(run_id)
             previous = deepcopy(run)
@@ -106,6 +130,13 @@ class RunManager:
                 raise ValueError(
                     f"Run cannot be aborted from state {run.state.value}: {run_id}"
                 )
+
+            self._transition_authority.assert_authorized(
+                run,
+                RunState.ABORTED,
+                actor,
+                reason=reason,
+            )
 
             transition_run(run, RunState.ABORTED)
             run.final_disposition = FinalDisposition.ABORTED
@@ -285,6 +316,14 @@ class RunManager:
             if run.state is not RunState.RECOVERING:
                 previous = deepcopy(run)
                 previous_state = run.state
+
+                self._transition_authority.assert_authorized(
+                    run,
+                    RunState.RECOVERING,
+                    TransitionActor.RECOVERY,
+                    reason="run recovery requested",
+                )
+
                 transition_run(run, RunState.RECOVERING)
 
                 try:

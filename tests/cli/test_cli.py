@@ -4,6 +4,7 @@ from contextlib import redirect_stdout
 from vajra.cli import build_parser
 from vajra.cli.main import main
 from vajra.runtime import RunManager
+from vajra.control.transition_authority import TransitionActor
 
 
 def test_cli_exposes_vajra_program() -> None:
@@ -264,9 +265,9 @@ def test_run_abort_controls_recovering_run() -> None:
     manager = RunManager()
     make_cli_run(manager)
 
-    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.QUEUED)
-    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.ORIENTING)
-    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.RECOVERING)
+    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("run-1", __import__("vajra.domain", fromlist=["RunState"]).RunState.RECOVERING, TransitionActor.SYSTEM)
 
     result = main(
         ["run", "abort", "run-1", "operator requested abort"],
@@ -297,9 +298,9 @@ def test_status_exposes_waiting_human_state() -> None:
 
     from vajra.domain import RunState
 
-    manager.transition("run-1", RunState.QUEUED)
-    manager.transition("run-1", RunState.ORIENTING)
-    manager.transition("run-1", RunState.WAITING_HUMAN)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.WAITING_HUMAN, TransitionActor.SYSTEM)
 
     output = StringIO()
     with redirect_stdout(output):
@@ -320,9 +321,9 @@ def test_human_waiting_run_can_be_aborted_explicitly() -> None:
 
     from vajra.domain import RunState
 
-    manager.transition("run-1", RunState.QUEUED)
-    manager.transition("run-1", RunState.ORIENTING)
-    manager.transition("run-1", RunState.WAITING_HUMAN)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.WAITING_HUMAN, TransitionActor.SYSTEM)
 
     result = main(
         ["run", "abort", "run-1", "human denied continuation"],
@@ -341,9 +342,9 @@ def test_waiting_human_does_not_auto_approve() -> None:
 
     from vajra.domain import RunState
 
-    manager.transition("run-1", RunState.QUEUED)
-    manager.transition("run-1", RunState.ORIENTING)
-    manager.transition("run-1", RunState.WAITING_HUMAN)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.WAITING_HUMAN, TransitionActor.SYSTEM)
 
     output = StringIO()
     with redirect_stdout(output):

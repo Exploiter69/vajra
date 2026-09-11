@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 
+from vajra.control.transition_authority import TransitionActor
 from vajra.domain import EngineeringRun, RunState
 from vajra.runtime import RunManager
 
@@ -140,7 +141,7 @@ def _events(manager: RunManager, args: argparse.Namespace) -> int:
 
 def _transition(manager: RunManager, args: argparse.Namespace) -> int:
     target = RunState(args.state)
-    run = manager.transition(args.run_id, target)
+    run = manager.transition(args.run_id, target, TransitionActor.HUMAN, reason="CLI transition")
 
     print(f"run_id: {run.run_id}")
     print(f"state: {run.state.value}")
@@ -148,7 +149,7 @@ def _transition(manager: RunManager, args: argparse.Namespace) -> int:
 
 
 def _abort(manager: RunManager, args: argparse.Namespace) -> int:
-    run = manager.abort_run(args.run_id, args.reason)
+    run = manager.abort_run(args.run_id, args.reason, TransitionActor.HUMAN)
 
     print(f"run_id: {run.run_id}")
     print(f"state: {run.state.value}")

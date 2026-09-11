@@ -9,6 +9,7 @@ from vajra.recovery.policy import RecoveryDecision
 from vajra.runtime.run_manager import RunManager
 from vajra.runtime.state_store import InMemoryStateStore
 from vajra.runtime.event_store import InMemoryEventStore
+from vajra.control.transition_authority import TransitionActor
 
 
 def make_manager() -> RunManager:
@@ -29,8 +30,8 @@ def make_manager() -> RunManager:
     )
 
     manager.create_run(run)
-    manager.transition("run-1", RunState.QUEUED)
-    manager.transition("run-1", RunState.ORIENTING)
+    manager.transition("run-1", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-1", RunState.ORIENTING, TransitionActor.SYSTEM)
     manager.recover_run("run-1")
 
     return manager
@@ -110,7 +111,7 @@ def test_rejects_mismatched_failure() -> None:
 
 def test_requires_recovering_run() -> None:
     manager = make_manager()
-    manager.transition("run-1", RunState.WAITING_HUMAN)
+    manager.transition("run-1", RunState.WAITING_HUMAN, TransitionActor.SYSTEM)
     handler = RequestHumanRecoveryHandler(manager)
 
     with pytest.raises(ValueError, match="not recovering"):

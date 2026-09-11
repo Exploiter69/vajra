@@ -7,6 +7,7 @@ from vajra.domain import (
     StepState,
 )
 from vajra.runtime import RunManager
+from vajra.control.transition_authority import TransitionActor
 
 
 def make_run(run_id: str = "run-001") -> EngineeringRun:
@@ -112,8 +113,8 @@ def test_recovery_moves_run_to_recovering():
     manager = RunManager()
     manager.create_run(make_run())
 
-    manager.transition("run-001", RunState.QUEUED)
-    manager.transition("run-001", RunState.ORIENTING)
+    manager.transition("run-001", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-001", RunState.ORIENTING, TransitionActor.SYSTEM)
 
     manager.recover_run("run-001")
 
@@ -147,10 +148,10 @@ def test_lifecycle_events_are_recorded() -> None:
 
     run = make_run("run-events")
     manager.create_run(run)
-    manager.transition("run-events", RunState.QUEUED)
-    manager.transition("run-events", RunState.ORIENTING)
-    manager.transition("run-events", RunState.PLANNING)
-    manager.transition("run-events", RunState.EXECUTING)
+    manager.transition("run-events", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("run-events", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("run-events", RunState.PLANNING, TransitionActor.SYSTEM)
+    manager.transition("run-events", RunState.EXECUTING, TransitionActor.SYSTEM)
 
     step = manager.add_step("run-events", "step-1", "inspect")
     manager.start_attempt(
