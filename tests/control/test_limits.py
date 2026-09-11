@@ -142,3 +142,53 @@ def test_budget_belongs_to_run() -> None:
                 max_worker_runtime_seconds=300,
             ),
         )
+
+
+def test_strategy_loop_escalates_to_human() -> None:
+    controller = BoundedAutonomy()
+
+    decisions = [
+        controller.assess(
+            make_run(),
+            make_budget(),
+            strategy_id="strategy-a",
+        )
+        for _ in range(2)
+    ]
+
+    assert decisions[0].action is LimitAction.CONTINUE
+    assert decisions[1].action is LimitAction.WAIT_HUMAN
+    assert decisions[1].strategy is not None
+    assert decisions[1].strategy.repeated
+
+
+def test_strategy_oscillation_escalates_to_human() -> None:
+    controller = BoundedAutonomy()
+
+    decisions = [
+        controller.assess(
+            make_run(),
+            make_budget(),
+            strategy_id=strategy,
+        )
+        for strategy in ("strategy-a", "strategy-b", "strategy-a")
+    ]
+
+    assert decisions[-1].action is LimitAction.WAIT_HUMAN
+    assert decisions[-1].strategy is not None
+    assert decisions[-1].strategy.oscillating
+
+
+def test_budget_beats_strategy_loop() -> None:
+    controller = BoundedAutonomy()
+
+    for _ in range(2):
+        decision = controller.assess(
+            make_run(),
+            make_budget(max_model_calls=1),
+            BudgetUsage(model_calls=1),
+            strategy_id="strategy-a",
+        )
+
+    assert decision.action is LimitAction.ABORT
+    assert decision.divergence is DivergenceClass.BUDGET_DIVERGENCE

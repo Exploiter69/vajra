@@ -10,6 +10,7 @@ from vajra.recovery.progress import (
     ProgressAssessment,
     ProgressObservation,
 )
+from vajra.recovery.strategy_loop import StrategyLoopAssessment, StrategyLoopDetector
 
 from .contracts import DivergenceClass
 
@@ -28,6 +29,7 @@ class LimitDecision:
     divergence: DivergenceClass
     budget: BudgetAssessment
     progress: ProgressAssessment | None = None
+    strategy: StrategyLoopAssessment | None = None
 
 
 class BoundedAutonomy:
@@ -44,9 +46,11 @@ class BoundedAutonomy:
         *,
         budget_enforcer: BudgetEnforcer | None = None,
         progress_detector: NoProgressDetector | None = None,
+        strategy_detector: StrategyLoopDetector | None = None,
     ) -> None:
         self._budget = budget_enforcer or BudgetEnforcer()
         self._progress = progress_detector or NoProgressDetector()
+        self._strategy = strategy_detector or StrategyLoopDetector()
 
     def assess(
         self,
@@ -55,6 +59,7 @@ class BoundedAutonomy:
         usage: BudgetUsage | None = None,
         *,
         progress: ProgressObservation | None = None,
+        strategy_id: str | None = None,
         now=None,
     ) -> LimitDecision:
         budget_assessment = self._budget.assess(
@@ -73,6 +78,24 @@ class BoundedAutonomy:
             )
 
         progress_assessment = None
+        strategy_assessment = None
+
+        if strategy_id is not None:
+            strategy_assessment = self._strategy.observe(
+                run_id=run.run_id,
+                step_id=progress.step_id if progress is not None else "__run__",
+                strategy_id=strategy_id,
+            )
+
+            if strategy_assessment.anti_loop:
+                return LimitDecision(
+                    action=LimitAction.WAIT_HUMAN,
+                    reason="strategy loop threshold reached",
+                    divergence=DivergenceClass.UNKNOWN,
+                    budget=budget_assessment,
+                    progress=progress_assessment,
+                    strategy=strategy_assessment,
+                )
 
         if progress is not None:
             progress_assessment = self._progress.observe(progress)
@@ -84,6 +107,7 @@ class BoundedAutonomy:
                     divergence=DivergenceClass.UNKNOWN,
                     budget=budget_assessment,
                     progress=progress_assessment,
+                    strategy=strategy_assessment,
                 )
 
         return LimitDecision(
@@ -92,6 +116,7 @@ class BoundedAutonomy:
             divergence=DivergenceClass.NONE,
             budget=budget_assessment,
             progress=progress_assessment,
+            strategy=strategy_assessment,
         )
 
 

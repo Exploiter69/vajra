@@ -78,10 +78,12 @@ class NoProgressDetector:
     def fingerprint(
         observation: ProgressObservation,
     ) -> ProgressFingerprint:
+        # Attempt identity is intentionally excluded. A replacement attempt
+        # observing the same external engineering state is still the same
+        # no-progress situation.
         payload = {
             "run_id": observation.run_id,
             "step_id": observation.step_id,
-            "attempt_id": observation.attempt_id,
             "state_digest": observation.state_digest,
             "git_revision": observation.git_revision,
             "patch_digest": observation.patch_digest,

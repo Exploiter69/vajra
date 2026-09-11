@@ -96,14 +96,14 @@ def test_failure_is_emitted_only_at_threshold() -> None:
     assert failure.details["threshold"] == 2
 
 
-def test_different_attempts_do_not_share_progress_count() -> None:
+def test_different_attempts_share_identical_external_progress_state() -> None:
     detector = NoProgressDetector(repetition_threshold=2)
 
     first = make_observation(attempt_id="attempt-1")
     second = make_observation(attempt_id="attempt-2")
 
     assert not detector.observe(first).no_progress
-    assert not detector.observe(second).no_progress
+    assert detector.observe(second).no_progress
 
 
 def test_reset_forgets_run_step_observations() -> None:
