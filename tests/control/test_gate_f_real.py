@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import subprocess
 
@@ -16,11 +16,18 @@ from vajra.control.contracts import (
     ReconciliationDisposition,
 )
 from vajra.control.controller import Controller, ControllerAction
+from vajra.control.idempotency import IdempotencyDisposition, IdempotencyRegistry
+from vajra.control.limits import BoundedAutonomy, LimitAction
 from vajra.control.reality import RealityObserver
 from vajra.control.transition_authority import TransitionActor, TransitionDenied
 from vajra.control.worktree import WorktreeManager
-from vajra.domain import EngineeringRun, RunState
+from vajra.domain import Budget, EngineeringRun, RunState
+from vajra.recovery.budget import BudgetUsage
+from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
+from vajra.runtime.state_store import InMemoryStateStore
+from vajra.runtime.worker_acceptance import WorkerExecutionIdentity, WorkerResultAcceptor
+from vajra.runtime.worker_protocol import WorkerResult
 
 
 def git(path: Path, *args: str) -> str:
@@ -270,14 +277,150 @@ def test_fresh_reality_reconciliation_observes_actual_workspace_divergence(tmp_p
     assert dirty.freshness == "FRESH"
 
 
-def test_recovery_is_durable_not_an_in_memory_controller_flag():
+def test_idempotent_replay_allows_only_one_effect():
+    from vajra.control.contracts import OperationIdentity
+
+    registry = IdempotencyRegistry()
+    operation = OperationIdentity(
+        operation_id="operation-gate-f-real",
+        run_id="gate-f-real",
+        step_id="step-gate-f",
+        attempt_id="attempt-gate-f",
+        intent_id="intent-gate-f",
+        operation_type="WRITE",
+        parameters_digest="parameters-gate-f",
+        target_resource="resource-gate-f",
+        fencing_token=1,
+        idempotency_key="effect-gate-f-real",
+    )
+    effects = []
+
+    def apply_effect() -> None:
+        effects.append("created")
+
+    for _ in range(2):
+        decision = registry.check(operation, {"effect": "created"})
+        if decision.disposition is IdempotencyDisposition.NEW:
+            apply_effect()
+
+    assert effects == ["created"]
+    assert registry.contains(operation.idempotency_key)
+
+
+def test_budget_exhaustion_becomes_durable_abort():
     manager = RunManager()
     manager.create_run(make_run())
     manager.transition("gate-f-real", RunState.QUEUED, TransitionActor.SYSTEM)
     manager.transition("gate-f-real", RunState.ORIENTING, TransitionActor.SYSTEM)
-    manager.transition("gate-f-real", RunState.RECOVERING, TransitionActor.RECOVERY)
+    manager.transition("gate-f-real", RunState.PLANNING, TransitionActor.SYSTEM)
+    manager.transition("gate-f-real", RunState.EXECUTING, TransitionActor.SYSTEM)
 
-    recovered = manager.recover_run("gate-f-real")
-    assert recovered.state is RunState.RECOVERING
-    assert manager.get_run("gate-f-real").state is RunState.RECOVERING
-    assert any(event.event_type == "RUN_RECOVERING" for event in manager.events("gate-f-real"))
+    budget = Budget(
+        budget_id="budget-gate-f",
+        max_runtime_seconds=3600,
+        max_steps=100,
+        max_attempts=100,
+        max_model_calls=100,
+        max_command_count=1,
+        max_output_size=1_000_000,
+        max_worker_runtime_seconds=3600,
+    )
+    decision = BoundedAutonomy().assess(
+        manager.get_run("gate-f-real"),
+        budget,
+        usage=BudgetUsage(command_count=1),
+    )
+    assert decision.action is LimitAction.ABORT
+
+    manager.transition("gate-f-real", RunState.RECOVERING, TransitionActor.RECOVERY)
+    manager.abort_run("gate-f-real", decision.reason, TransitionActor.RECOVERY)
+    assert manager.get_run("gate-f-real").state is RunState.ABORTED
+    assert manager.events("gate-f-real")[-1].event_type == "RUN_ABORTED"
+
+
+def test_no_progress_becomes_durable_waiting_human():
+    from vajra.recovery.progress import ProgressObservation
+
+    manager = RunManager()
+    manager.create_run(make_run())
+    manager.transition("gate-f-real", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("gate-f-real", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("gate-f-real", RunState.PLANNING, TransitionActor.SYSTEM)
+    manager.transition("gate-f-real", RunState.EXECUTING, TransitionActor.SYSTEM)
+
+    observation = ProgressObservation(
+        run_id="gate-f-real",
+        step_id="step-gate-f",
+        attempt_id="attempt-gate-f",
+        state_digest="same-state",
+        git_revision="same-revision",
+        patch_digest="same-patch",
+        test_signature="same-tests",
+        error_signature="same-error",
+    )
+    limits = BoundedAutonomy()
+    for _ in range(3):
+        decision = limits.assess(
+            manager.get_run("gate-f-real"),
+            Budget(
+                budget_id="budget-gate-f",
+                max_runtime_seconds=3600,
+                max_steps=100,
+                max_attempts=100,
+                max_model_calls=100,
+                max_command_count=100,
+                max_output_size=1_000_000,
+                max_worker_runtime_seconds=3600,
+            ),
+            progress=observation,
+        )
+    assert decision.action is LimitAction.WAIT_HUMAN
+    manager.transition("gate-f-real", RunState.WAITING_HUMAN, TransitionActor.CONTROLLER)
+    assert manager.get_run("gate-f-real").state is RunState.WAITING_HUMAN
+
+
+def test_stale_worker_result_cannot_change_canonical_state():
+    state_store = InMemoryStateStore()
+    event_store = InMemoryEventStore()
+    manager = RunManager(state_store=state_store, event_store=event_store)
+    manager.create_run(make_run())
+    manager.add_step("gate-f-real", "step-gate-f", "worker step")
+    manager.transition("gate-f-real", RunState.QUEUED, TransitionActor.SYSTEM)
+    manager.transition("gate-f-real", RunState.ORIENTING, TransitionActor.SYSTEM)
+    manager.transition("gate-f-real", RunState.PLANNING, TransitionActor.SYSTEM)
+    manager.transition("gate-f-real", RunState.EXECUTING, TransitionActor.SYSTEM)
+
+    now = datetime.now(timezone.utc)
+    attempt = manager.start_attempt(
+        "gate-f-real",
+        "step-gate-f",
+        "attempt-gate-f",
+        "worker-a",
+        "lease-a",
+        lease_ttl_seconds=60,
+        now=now,
+    )
+    lease = manager.get_lease(attempt.attempt_id)
+    assert lease is not None
+
+    manager.lease_manager.acquire(
+        "attempt-gate-f",
+        "worker-b",
+        "lease-b",
+        60,
+        now=now,
+    )
+    acceptor = WorkerResultAcceptor(manager.lease_manager, state_store, event_store)
+    identity = WorkerExecutionIdentity(
+        run_id="gate-f-real",
+        step_id="step-gate-f",
+        attempt_id="attempt-gate-f",
+        worker_id="worker-a",
+        lease_id="lease-a",
+        fencing_token=lease.fencing_token,
+    )
+
+    with pytest.raises(PermissionError, match="stale"):
+        acceptor.accept(identity, WorkerResult(status="SUCCEEDED"), now=now)
+
+    assert manager.get_run("gate-f-real").steps[0].attempts[0].state.value == "RUNNING"
