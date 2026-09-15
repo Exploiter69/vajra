@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 import subprocess
 
@@ -420,7 +420,7 @@ def test_stale_worker_result_cannot_change_canonical_state():
         fencing_token=lease.fencing_token,
     )
 
-    with pytest.raises(PermissionError, match="stale"):
+    with pytest.raises(PermissionError, match="does not own"):
         acceptor.accept(identity, WorkerResult(status="SUCCEEDED"), now=now)
 
     assert manager.get_run("gate-f-real").steps[0].attempts[0].state.value == "RUNNING"
