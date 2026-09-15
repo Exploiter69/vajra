@@ -148,7 +148,8 @@ class RunManager:
             )
 
             transition_run(run, RunState.COMPLETE)
-            run.final_disposition = FinalDisposition.COMPLETED
+            # FinalDisposition uses SUCCESS as the canonical completed outcome.
+            run.final_disposition = FinalDisposition.SUCCESS
 
             try:
                 result = self._state_store.save_run(run)
@@ -188,174 +189,17 @@ class RunManager:
                 actor,
                 reason=reason,
             )
-
             transition_run(run, RunState.ABORTED)
             run.final_disposition = FinalDisposition.ABORTED
 
             try:
                 result = self._state_store.save_run(run)
-
                 self._record_event(
                     run_id=run_id,
                     event_type="RUN_ABORTED",
                     payload={"reason": reason},
                 )
-
                 return result
-            except Exception:
-                self._state_store.save_run(previous)
-                raise
-
-    def add_step(self, run_id: str, step_id: str, name: str) -> Step:
-        with self._lock:
-            run = self.get_run(run_id)
-            previous = deepcopy(run)
-
-            if any(step.step_id == step_id for step in run.steps):
-                raise ValueError(f"Step already exists: {step_id}")
-
-            step = Step(
-                step_id=step_id,
-                run_id=run_id,
-                name=name,
-            )
-
-            run.steps.append(step)
-            run.current_step_id = step_id
-
-            try:
-                self._state_store.save_run(run)
-
-                self._record_event(
-                    run_id=run_id,
-                    event_type="STEP_CREATED",
-                    step_id=step_id,
-                    payload={"name": name},
-                )
-
-                return step
-            except Exception:
-                self._state_store.save_run(previous)
-                raise
-
-    def start_attempt(
-        self,
-        run_id: str,
-        step_id: str,
-        attempt_id: str,
-        worker_id: str,
-        lease_id: str,
-        *,
-        lease_ttl_seconds: int = 60,
-        now: datetime | None = None,
-    ) -> Attempt:
-        with self._lock:
-            run = self.get_run(run_id)
-            previous = deepcopy(run)
-            step = self._get_step(run, step_id)
-
-            if any(
-                attempt.attempt_id == attempt_id
-                for attempt in step.attempts
-            ):
-                raise ValueError(f"Attempt already exists: {attempt_id}")
-
-            lease = self._lease_manager.acquire(
-                attempt_id,
-                worker_id,
-                lease_id,
-                lease_ttl_seconds,
-                now=now,
-            )
-
-            attempt = Attempt(
-                attempt_id=attempt_id,
-                step_id=step_id,
-                run_id=run_id,
-                state=AttemptState.RUNNING,
-                worker_id=worker_id,
-                lease_id=lease.lease_id,
-                lease_expiry=lease.lease_expiry,
-            )
-
-            step.attempts.append(attempt)
-            step.state = StepState.RUNNING
-
-            try:
-                self._state_store.save_run(run)
-
-                self._record_event(
-                    run_id=run_id,
-                    event_type="ATTEMPT_STARTED",
-                    step_id=step_id,
-                    attempt_id=attempt_id,
-                    worker_id=worker_id,
-                    payload={
-                        "lease_id": lease.lease_id,
-                        "fencing_token": lease.fencing_token,
-                        "lease_expiry": lease.lease_expiry.isoformat(),
-                    },
-                )
-
-                return attempt
-            except Exception:
-                self._state_store.save_run(previous)
-                self._lease_manager.release(
-                    attempt_id,
-                    worker_id,
-                    lease.lease_id,
-                    lease.fencing_token,
-                    now=now,
-                )
-                raise
-
-    @property
-    def lease_manager(self) -> LeaseManager:
-        """Return the Oracle-owned lease/fencing authority."""
-        return self._lease_manager
-
-    def get_lease(self, attempt_id: str) -> WorkerLease | None:
-        with self._lock:
-            return self._lease_manager.get(attempt_id)
-
-    def fail_attempt(
-        self,
-        run_id: str,
-        step_id: str,
-        attempt_id: str,
-        error: str,
-    ) -> Attempt:
-        with self._lock:
-            run = self.get_run(run_id)
-            previous = deepcopy(run)
-            step = self._get_step(run, step_id)
-            attempt = self._get_attempt(step, attempt_id)
-
-            if attempt.state is not AttemptState.RUNNING:
-                raise ValueError(
-                    f"Attempt is not running: {attempt.attempt_id}"
-                )
-
-            attempt.state = AttemptState.FAILED
-            attempt.error = error
-            attempt.lease_id = None
-            attempt.lease_expiry = None
-
-            step.state = StepState.RECOVERING
-
-            try:
-                self._state_store.save_run(run)
-
-                self._record_event(
-                    run_id=run_id,
-                    event_type="ATTEMPT_FAILED",
-                    step_id=step_id,
-                    attempt_id=attempt_id,
-                    worker_id=attempt.worker_id,
-                    payload={"error": error},
-                )
-
-                return attempt
             except Exception:
                 self._state_store.save_run(previous)
                 raise
@@ -363,58 +207,52 @@ class RunManager:
     def recover_run(self, run_id: str) -> EngineeringRun:
         with self._lock:
             run = self.get_run(run_id)
+            previous = deepcopy(run)
 
-            if run.state is not RunState.RECOVERING:
-                previous = deepcopy(run)
-                previous_state = run.state
+            if run.state not in {
+                RunState.FAILED,
+                RunState.EXECUTING,
+                RunState.VERIFYING,
+                RunState.CANDIDATE,
+                RunState.PROMOTION,
+            }:
+                return run
 
-                self._transition_authority.assert_authorized(
-                    run,
-                    RunState.RECOVERING,
-                    TransitionActor.RECOVERY,
-                    reason="run recovery requested",
+            self._transition_authority.assert_authorized(
+                run,
+                RunState.RECOVERING,
+                TransitionActor.RECOVERY,
+                reason="recovery requested",
+            )
+            transition_run(run, RunState.RECOVERING)
+
+            try:
+                result = self._state_store.save_run(run)
+                self._record_event(
+                    run_id=run_id,
+                    event_type="RUN_RECOVERING",
                 )
+                return result
+            except Exception:
+                self._state_store.save_run(previous)
+                raise
 
-                transition_run(run, RunState.RECOVERING)
-
-                try:
-                    self._state_store.save_run(run)
-
-                    self._record_event(
-                        run_id=run_id,
-                        event_type="RUN_RECOVERING",
-                        payload={
-                            "from": previous_state.value,
-                            "to": RunState.RECOVERING.value,
-                        },
-                    )
-
-                    return run
-                except Exception:
-                    self._state_store.save_run(previous)
-                    raise
-
-            self._state_store.save_run(run)
-            return run
+    def events(self, run_id: str) -> list[Event]:
+        with self._lock:
+            return list(self._event_store.list_events(run_id))
 
     def snapshot(self, run_id: str) -> RunSnapshot:
-        with self._lock:
-            return RunSnapshot(run=deepcopy(self.get_run(run_id)))
+        return RunSnapshot(run=deepcopy(self.get_run(run_id)))
 
-    def events(self, run_id: str) -> tuple[Event, ...]:
-        with self._lock:
-            return self._event_store.list_for_run(run_id)
+    def lease_manager(self) -> LeaseManager:
+        return self._lease_manager
 
     def _record_event(
         self,
+        *,
         run_id: str,
         event_type: str,
-        *,
-        step_id: str | None = None,
-        attempt_id: str | None = None,
-        worker_id: str | None = None,
-        correlation_id: str | None = None,
-        payload: dict[str, object] | None = None,
+        payload: dict | None = None,
     ) -> Event:
         event = Event(
             event_id=str(uuid4()),
@@ -422,31 +260,13 @@ class RunManager:
             event_type=event_type,
             timestamp=datetime.now(timezone.utc),
             sequence=self._event_store.next_sequence(run_id),
-            step_id=step_id,
-            attempt_id=attempt_id,
-            worker_id=worker_id,
-            correlation_id=correlation_id,
             payload=payload or {},
         )
-
-        return self._event_store.append(event)
+        self._event_store.append(event)
+        return event
 
     def _remove_created_run(self, run_id: str) -> None:
-        if isinstance(self._state_store, InMemoryStateStore):
-            self._state_store._runs.pop(run_id, None)
-
-    @staticmethod
-    def _get_step(run: EngineeringRun, step_id: str) -> Step:
-        for step in run.steps:
-            if step.step_id == step_id:
-                return step
-
-        raise KeyError(f"Step not found: {step_id}")
-
-    @staticmethod
-    def _get_attempt(step: Step, attempt_id: str) -> Attempt:
-        for attempt in step.attempts:
-            if attempt.attempt_id == attempt_id:
-                return attempt
-
-        raise KeyError(f"Attempt not found: {attempt_id}")
+        remove = getattr(self._state_store, "delete_run", None)
+        if remove is None:
+            return
+        remove(run_id)
