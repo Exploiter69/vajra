@@ -34,12 +34,12 @@ def git(path: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def make_run() -> EngineeringRun:
+def make_run(base_revision: str = "revision-gate-f") -> EngineeringRun:
     return EngineeringRun(
         run_id="gate-f-real",
         objective="prove Gate F integration",
         repository_id="repo-gate-f",
-        base_revision="revision-gate-f",
+        base_revision=base_revision,
         acceptance_criteria=("criteria-gate-f",),
         policy_id="policy-gate-f",
         policy_version="1",
@@ -76,7 +76,7 @@ def make_criteria() -> AcceptanceCriteria:
     )
 
 
-def make_accepted() -> object:
+def make_accepted():
     return AcceptanceEvaluator().evaluate(
         make_criteria(),
         {
@@ -206,13 +206,11 @@ def test_controller_cannot_complete_even_when_completion_evidence_exists():
     manager = RunManager()
     manager.create_run(make_run())
     advance_to_promotion(manager)
-    accepted = make_accepted()
 
-    # Evidence is sufficient for the completion gate, but controller authority is not.
     with pytest.raises(TransitionDenied, match="COMPLETE requires SYSTEM or HUMAN"):
         manager.complete_run(
             "gate-f-real",
-            accepted,
+            make_accepted(),
             artifact_refs=("artifact-1",),
             verification_refs=("verification-1",),
             policy_approved=True,
@@ -241,8 +239,7 @@ def test_fresh_reality_reconciliation_observes_actual_workspace_divergence(tmp_p
         workspace_id="workspace-gate-f",
         path=tmp_path / "worktree",
     )
-    run = make_run()
-    run.base_revision = revision
+    run = make_run(revision)
 
     observer = RealityObserver()
     clean = observer.observe(
@@ -268,7 +265,7 @@ def test_fresh_reality_reconciliation_observes_actual_workspace_divergence(tmp_p
         budget_state="AVAILABLE",
     )
 
-    assert dirty.divergence_class is DivergenceClass.WORKSPACE if hasattr(DivergenceClass, "WORKSPACE") else dirty.divergence_class is DivergenceClass.RECOVERABLE
+    assert dirty.divergence_class is DivergenceClass.RECOVERABLE
     assert dirty.disposition is ReconciliationDisposition.RECOVERABLE
     assert dirty.freshness == "FRESH"
 
