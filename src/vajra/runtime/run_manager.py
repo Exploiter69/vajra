@@ -18,6 +18,7 @@ from vajra.domain import (
     transition_run,
 )
 
+from vajra.control.completion import CompletionGate
 from vajra.control.transition_authority import (
     TransitionActor,
     TransitionAuthority,
@@ -57,6 +58,7 @@ class RunManager:
         self._lock = RLock()
         self._lease_manager = LeaseManager()
         self._transition_authority = TransitionAuthority()
+        self._completion_gate = CompletionGate()
 
     def create_run(self, run: EngineeringRun) -> EngineeringRun:
         with self._lock:
@@ -111,6 +113,55 @@ class RunManager:
                     },
                 )
 
+                return result
+            except Exception:
+                self._state_store.save_run(previous)
+                raise
+
+    def complete_run(
+        self,
+        run_id: str,
+        acceptance,
+        *,
+        artifact_refs: tuple[str, ...],
+        verification_refs: tuple[str, ...],
+        policy_approved: bool,
+        actor: TransitionActor,
+        reason: str = "",
+    ) -> EngineeringRun:
+        """Complete a Run only after the evidence-bound completion gate passes."""
+        with self._lock:
+            self._completion_gate.authorize(
+                acceptance,
+                artifact_refs=artifact_refs,
+                verification_refs=verification_refs,
+                policy_approved=policy_approved,
+            )
+
+            run = self.get_run(run_id)
+            previous = deepcopy(run)
+            self._transition_authority.assert_authorized(
+                run,
+                RunState.COMPLETE,
+                actor,
+                reason=reason or "completion prerequisites satisfied",
+            )
+
+            transition_run(run, RunState.COMPLETE)
+            run.final_disposition = FinalDisposition.COMPLETED
+
+            try:
+                result = self._state_store.save_run(run)
+                self._record_event(
+                    run_id=run_id,
+                    event_type="RUN_COMPLETED",
+                    payload={
+                        "acceptance_criteria_id": acceptance.criteria_id,
+                        "acceptance_criteria_version": acceptance.criteria_version,
+                        "artifact_refs": list(artifact_refs),
+                        "verification_refs": list(verification_refs),
+                    },
+                )
                 return result
             except Exception:
                 self._state_store.save_run(previous)
