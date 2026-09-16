@@ -13,14 +13,18 @@ class TrustClass(str, Enum):
     VERIFIED_EVIDENCE = "VERIFIED_EVIDENCE"
     REPOSITORY_CONTENT = "REPOSITORY_CONTENT"
     MODEL_OUTPUT = "MODEL_OUTPUT"
+    WORKER_OUTPUT = "WORKER_OUTPUT"
+    EXTERNAL_CONTENT = "EXTERNAL_CONTENT"
     HISTORICAL = "HISTORICAL"
     UNTRUSTED_INSTRUCTION = "UNTRUSTED_INSTRUCTION"
     GENERATED_SUMMARY = "GENERATED_SUMMARY"
     LOSSY_COMPRESSION = "LOSSY_COMPRESSION"
+    UNKNOWN = "UNKNOWN"
 
 
 class SourceKind(str, Enum):
     OBJECTIVE = "OBJECTIVE"
+    ACCEPTANCE = "ACCEPTANCE"
     FILE = "FILE"
     SYMBOL = "SYMBOL"
     REFERENCE = "REFERENCE"
@@ -28,6 +32,10 @@ class SourceKind(str, Enum):
     HISTORY = "HISTORY"
     EVIDENCE = "EVIDENCE"
     WORKSPACE_METADATA = "WORKSPACE_METADATA"
+    RECONCILIATION = "RECONCILIATION"
+    CONSTRAINT = "CONSTRAINT"
+    CAPABILITY = "CAPABILITY"
+    BUDGET = "BUDGET"
     INSTRUCTION = "INSTRUCTION"
 
 
@@ -74,8 +82,13 @@ class ContextItem:
                 raise ValueError(f"{name} must not be empty")
         if self.trust is TrustClass.AUTHORITATIVE and self.source_kind not in {
             SourceKind.OBJECTIVE,
+            SourceKind.ACCEPTANCE,
             SourceKind.EVIDENCE,
             SourceKind.WORKSPACE_METADATA,
+            SourceKind.RECONCILIATION,
+            SourceKind.CONSTRAINT,
+            SourceKind.CAPABILITY,
+            SourceKind.BUDGET,
         }:
             raise ValueError("repository/model content cannot be authoritative context")
 
@@ -93,6 +106,17 @@ class ContextBundle:
     generated_at: datetime
     items: tuple[ContextItem, ...]
     digest: str
+    acceptance_criteria: tuple[str, ...] = ()
+    repository_summary: str = ""
+    relevant_files: tuple[str, ...] = ()
+    relevant_symbols: tuple[str, ...] = ()
+    dependencies: tuple[str, ...] = ()
+    recent_changes: tuple[str, ...] = ()
+    relevant_history: tuple[str, ...] = ()
+    current_reconciliation: dict[str, Any] = field(default_factory=dict)
+    constraints: tuple[str, ...] = ()
+    allowed_capabilities: tuple[str, ...] = ()
+    budget: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in ("bundle_id", "run_id", "workspace_id", "repository_id", "revision", "filesystem_digest", "index_digest", "query", "digest"):
@@ -110,6 +134,17 @@ class ContextBundle:
             "index_digest": self.index_digest,
             "query": self.query,
             "items": self.items,
+            "acceptance_criteria": self.acceptance_criteria,
+            "repository_summary": self.repository_summary,
+            "relevant_files": self.relevant_files,
+            "relevant_symbols": self.relevant_symbols,
+            "dependencies": self.dependencies,
+            "recent_changes": self.recent_changes,
+            "relevant_history": self.relevant_history,
+            "current_reconciliation": self.current_reconciliation,
+            "constraints": self.constraints,
+            "allowed_capabilities": self.allowed_capabilities,
+            "budget": self.budget,
         })
         if self.digest != expected:
             raise ValueError("ContextBundle digest mismatch")
@@ -155,13 +190,6 @@ class RetrievalHit:
 
 
 __all__ = [
-    "ContextItem",
-    "ContextBundle",
-    "Freshness",
-    "IndexFile",
-    "RepositoryIndex",
-    "RetrievalHit",
-    "SourceKind",
-    "TrustClass",
-    "stable_digest",
+    "ContextItem", "ContextBundle", "Freshness", "IndexFile", "RepositoryIndex",
+    "RetrievalHit", "SourceKind", "TrustClass", "stable_digest",
 ]
