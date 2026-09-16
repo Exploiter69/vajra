@@ -9,7 +9,6 @@ from typing import Any
 
 
 class TrustClass(str, Enum):
-    # Normative Phase 8 provenance vocabulary.
     TRUSTED_SYSTEM = "TRUSTED_SYSTEM"
     TRUSTED_POLICY = "TRUSTED_POLICY"
     TRUSTED_VERIFICATION = "TRUSTED_VERIFICATION"
@@ -19,8 +18,6 @@ class TrustClass(str, Enum):
     EXTERNAL_CONTENT = "EXTERNAL_CONTENT"
     HISTORICAL_MEMORY = "HISTORICAL_MEMORY"
     UNKNOWN = "UNKNOWN"
-
-    # Compatibility/clarity aliases used by the broader VAJRA vocabulary.
     AUTHORITATIVE = "TRUSTED_SYSTEM"
     VERIFIED_EVIDENCE = "TRUSTED_VERIFICATION"
     REPOSITORY_CONTENT = "OBSERVED_REPOSITORY"
@@ -164,9 +161,15 @@ class RepositoryIndex:
     files: tuple[IndexFile, ...]
     history: tuple[str, ...]
     digest: str
+    dependency_edges: tuple[tuple[str, str], ...] = ()
+    symbol_locations: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
-        expected = stable_digest({"root": self.root, "revision": self.revision, "filesystem_digest": self.filesystem_digest, "files": self.files, "history": self.history})
+        expected = stable_digest({
+            "root": self.root, "revision": self.revision, "filesystem_digest": self.filesystem_digest,
+            "files": self.files, "history": self.history, "dependency_edges": self.dependency_edges,
+            "symbol_locations": self.symbol_locations,
+        })
         if self.digest != expected:
             raise ValueError("RepositoryIndex digest mismatch")
 
