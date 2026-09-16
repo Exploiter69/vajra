@@ -35,25 +35,27 @@ class IndexConfig:
 
 
 class RepositoryIndexer:
-    """Builds a deterministic, dependency-light repository index."""
+    """Build a deterministic repository index from observable workspace contents."""
 
     def __init__(self, config: IndexConfig | None = None) -> None:
         self.config = config or IndexConfig()
 
     @staticmethod
     def _git(root: Path, *args: str) -> str:
-        result = subprocess.run(
-            ["git", *args], cwd=root, capture_output=True, text=True, check=False
-        )
-        if result.returncode != 0:
-            return ""
-        return result.stdout.strip()
+        result = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False)
+        return result.stdout.strip() if result.returncode == 0 else ""
+
+    def current_revision(self, root: str | Path) -> str:
+        path = Path(root).expanduser().resolve()
+        if not path.is_dir():
+            raise ValueError(f"repository does not exist: {path}")
+        return self._git(path, "rev-parse", "HEAD") or "WORKTREE"
 
     def build(self, root: str | Path, revision: str | None = None) -> RepositoryIndex:
         path = Path(root).expanduser().resolve()
         if not path.is_dir():
             raise ValueError(f"repository does not exist: {path}")
-        actual_revision = revision or self._git(path, "rev-parse", "HEAD") or "WORKTREE"
+        actual_revision = revision or self.current_revision(path)
         files: list[IndexFile] = []
         for current, dirs, names in os.walk(path):
             dirs[:] = sorted(d for d in dirs if d not in self.config.ignored_dirs)
@@ -88,10 +90,8 @@ class RepositoryIndexer:
         fs_digest = stable_digest([(f.path, f.digest, f.size) for f in files])
         history = tuple(self._git(path, "log", f"-{self.config.max_history}", "--format=%H %s").splitlines())
         payload = {"root": str(path), "revision": actual_revision, "filesystem_digest": fs_digest, "files": files, "history": history}
-        return RepositoryIndex(
-            root=str(path), revision=actual_revision, filesystem_digest=fs_digest,
-            files=tuple(files), history=history, digest=stable_digest(payload),
-        )
+        return RepositoryIndex(root=str(path), revision=actual_revision, filesystem_digest=fs_digest,
+                               files=tuple(files), history=history, digest=stable_digest(payload))
 
     @staticmethod
     def _extract(text: str, language: str) -> tuple[set[str], set[str], set[str]]:
