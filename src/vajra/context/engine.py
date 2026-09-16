@@ -7,7 +7,7 @@ from typing import Any
 
 from vajra.control.reality import filesystem_digest
 
-from .contracts import ContextBundle, ContextItem, Freshness, RepositoryIndex, SourceKind, TrustClass, stable_digest
+from .contracts import ContextBundle, ContextItem, RepositoryIndex, SourceKind, TrustClass, stable_digest
 from .index import RepositoryIndexer
 from .retrieval import DeterministicRetriever, RetrievalQuery
 
@@ -33,7 +33,7 @@ class ContextEngine:
     def index(self, workspace: str | Path, revision: str | None = None) -> RepositoryIndex:
         root = Path(workspace).expanduser().resolve()
         fs = filesystem_digest(root)
-        revision_key = revision or "WORKTREE"
+        revision_key = revision or self._indexer.current_revision(root)
         key = (str(root), revision_key, fs)
         with self._lock:
             cached = self._cache.get(key)
@@ -89,7 +89,7 @@ class ContextEngine:
         objective_item = ContextItem(
             item_id=stable_digest((run_id, "objective", objective)),
             source_kind=SourceKind.OBJECTIVE,
-            trust=TrustClass.AUTHORITATIVE,
+            trust=TrustClass.TRUSTED_SYSTEM,
             locator=f"run:{run_id}:objective",
             content=objective,
             revision=actual_revision,
@@ -110,13 +110,9 @@ class ContextEngine:
                 content = hit.path[len("@history:"):]
                 relevant_history.append(content)
                 item = ContextItem(
-                    item_id=stable_digest((actual_revision, hit.path)),
-                    source_kind=SourceKind.HISTORY,
-                    trust=TrustClass.HISTORICAL,
-                    locator=hit.path,
-                    content=content,
-                    revision=actual_revision,
-                    digest=stable_digest(content),
+                    item_id=stable_digest((actual_revision, hit.path)), source_kind=SourceKind.HISTORY,
+                    trust=TrustClass.HISTORICAL_MEMORY, locator=hit.path, content=content,
+                    revision=actual_revision, digest=stable_digest(content),
                     metadata={"score": hit.score, "reasons": hit.reasons},
                 )
             else:
@@ -129,28 +125,20 @@ class ContextEngine:
                 lower_name = indexed.path.rsplit("/", 1)[-1].lower()
                 if lower_name in INSTRUCTION_FILES or lower_name.startswith(".cursorrules"):
                     source_kind = SourceKind.INSTRUCTION
-                    trust = TrustClass.UNTRUSTED_INSTRUCTION
+                    trust = TrustClass.OBSERVED_REPOSITORY
                 else:
                     source_kind = SourceKind.FILE
-                    trust = TrustClass.REPOSITORY_CONTENT
+                    trust = TrustClass.OBSERVED_REPOSITORY
                 relevant_files.append(indexed.path)
                 relevant_symbols.update(indexed.symbols)
                 dependencies.update(indexed.dependencies)
                 item = ContextItem(
                     item_id=stable_digest((actual_revision, indexed.path, indexed.digest)),
-                    source_kind=source_kind,
-                    trust=trust,
-                    locator=indexed.path,
-                    content=content,
-                    revision=actual_revision,
-                    digest=indexed.digest,
-                    metadata={
-                        "language": indexed.language,
-                        "symbols": indexed.symbols,
-                        "dependencies": indexed.dependencies,
-                        "score": hit.score,
-                        "reasons": hit.reasons,
-                    },
+                    source_kind=source_kind, trust=trust, locator=indexed.path,
+                    content=content, revision=actual_revision, digest=indexed.digest,
+                    metadata={"language": indexed.language, "symbols": indexed.symbols,
+                              "dependencies": indexed.dependencies, "score": hit.score,
+                              "reasons": hit.reasons},
                 )
             encoded_size = len(item.content.encode("utf-8"))
             if used + encoded_size > max_bytes:
