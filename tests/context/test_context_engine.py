@@ -44,6 +44,8 @@ def test_index_is_deterministic(repository: Path) -> None:
     assert [item.path for item in first.files] == sorted(item.path for item in first.files)
     auth = next(item for item in first.files if item.path == "auth.py")
     assert "TokenStore" in auth.symbols
+    assert ("consumer.py", "auth.py") in first.dependency_edges
+    assert ("TokenStore", "auth.py") in first.symbol_locations
 
 
 def test_retrieval_supports_symbol_and_dependency(repository: Path) -> None:
