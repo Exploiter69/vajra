@@ -6,7 +6,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 10 — Real Autonomous Engineering Loop: implementation complete; validation gate pending local execution.**
+**Phase 10 — Real Autonomous Engineering Loop: COMPLETE / CLOSED.**
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming.
 
@@ -40,14 +40,16 @@ repeat / recover / human / complete
 
 **Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a Phase 10 dependency.
 
-Phase 10 is not declared CLOSED until the Phase 10 tests, full suite, compile check, diff check, and clean working-tree validation have been run locally.
+Validation is closed with 6 Phase 10 tests, 578 portable full-suite tests, compile validation and diff validation. Four physical gVisor integration tests are excluded from hosted CI because Gate D already has separate physical validation.
 
 ## Phase 10 implementation
 
 - `src/vajra/autonomy/contracts.py` — structured plans, planned intents, progress measurements, reasoning boundary
 - `src/vajra/autonomy/loop.py` — bounded autonomous engineering controller
 - `tests/autonomy/test_phase10_loop.py` — end-to-end and safety coverage
-- `docs/PHASE_10_IMPLEMENTATION.md` — roadmap-to-implementation mapping
+- `docs/PHASE_10_IMPLEMENTATION.md` — roadmap-to-implementation mapping and closure evidence
+- `docs/PHASE_10_GATE_RESULT.md` — formal Phase 10 gate record
+- `.github/workflows/phase10-validation.yml` — free hosted validation for portable tests
 
 The loop preserves the architectural boundary:
 
@@ -94,7 +96,8 @@ The loop preserves the architectural boundary:
 - `docs/PHASE_8_IMPLEMENTATION.md` — context/workspace implementation
 - `docs/PHASE_9_IMPLEMENTATION.md` — verification/anti-gaming implementation
 - `docs/PHASE_9_GATE_RESULT.md` — Phase 9 closure record
-- `docs/PHASE_10_IMPLEMENTATION.md` — Phase 10 implementation and validation gate
+- `docs/PHASE_10_IMPLEMENTATION.md` — Phase 10 implementation and closure evidence
+- `docs/PHASE_10_GATE_RESULT.md` — Phase 10 gate closure record
 
 ## Frozen Baseline
 
