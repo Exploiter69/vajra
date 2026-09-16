@@ -40,7 +40,6 @@ class ContextEngine:
                 return cached
             index = self._indexer.build(root, revision=revision)
             self._cache[key] = index
-            # Invalidation is explicit and bounded: old workspace snapshots are removed.
             for old_key in tuple(self._cache):
                 if old_key[0] == str(root) and old_key != key:
                     del self._cache[old_key]
@@ -81,8 +80,6 @@ class ContextEngine:
         items: list[ContextItem] = []
         used = 0
 
-        # Objective and workspace metadata are authoritative because they originate in VAJRA,
-        # not from repository content.
         objective_item = ContextItem(
             item_id=stable_digest((run_id, "objective", objective)),
             source_kind=SourceKind.OBJECTIVE,
@@ -92,7 +89,11 @@ class ContextEngine:
             revision=actual_revision,
             digest=stable_digest(objective),
         )
+        objective_size = len(objective.encode("utf-8"))
+        if objective_size > max_bytes:
+            raise ContextError("objective exceeds context byte bound")
         items.append(objective_item)
+        used = objective_size
 
         for hit in hits:
             if hit.path.startswith("@history:"):
