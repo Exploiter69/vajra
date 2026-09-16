@@ -12,12 +12,12 @@ from vajra.verification.integrity import TestIntegrityAuditor
 from vajra.verification.plan import AcceptanceCriteriaCompiler, CriterionKind
 
 
-def frozen_criteria(objective: str = "run checks") -> AcceptanceCriteria:
+def frozen_criteria(objective: str = "run checks", *, kinds: tuple[str, ...] = ("COMMAND_EXIT",)) -> AcceptanceCriteria:
     return AcceptanceCriteria(
         criteria_id="criteria-1",
         version="1",
         objective_digest=stable_digest(objective),
-        predicates=(AcceptancePredicate("tests", "1", "tests pass"),),
+        predicates=tuple(AcceptancePredicate(f"predicate-{i}", "1", f"criterion {i}") for i in range(1, len(kinds) + 1)),
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         frozen_at=datetime(2026, 1, 1, 0, 1, tzinfo=timezone.utc),
     )
@@ -39,11 +39,29 @@ def test_acceptance_compiler_freezes_machine_checkable_plan() -> None:
     plan = AcceptanceCriteriaCompiler().compile(
         objective,
         frozen_criteria(objective),
-        [{"predicate_id": "tests", "kind": "COMMAND_EXIT", "command": ["pytest", "-q"], "expected_exit_code": 0}],
+        [{"predicate_id": "predicate-1", "kind": "COMMAND_EXIT", "command": ["pytest", "-q"], "expected_exit_code": 0}],
     )
     assert plan.checks[0].kind is CriterionKind.COMMAND_EXIT
     assert plan.checks[0].parameters == (("command", ("pytest", "-q")), ("expected_exit_code", 0))
     assert len(plan.integrity_digest) == 64
+
+
+def test_acceptance_compiler_supports_all_roadmap_check_kinds() -> None:
+    objective = "verify repository"
+    specs = [
+        {"predicate_id": "predicate-1", "kind": "COMMAND_EXIT", "command": ["pytest", "-q"], "expected_exit_code": 0},
+        {"predicate_id": "predicate-2", "kind": "FILE_EXISTS", "path": "src/app.py"},
+        {"predicate_id": "predicate-3", "kind": "FILE_CONTAINS", "path": "src/app.py", "needle": "def main"},
+        {"predicate_id": "predicate-4", "kind": "GIT_CLEAN"},
+    ]
+    criteria = frozen_criteria(objective, kinds=tuple(spec["kind"] for spec in specs))
+    plan = AcceptanceCriteriaCompiler().compile(objective, criteria, specs)
+    assert tuple(check.kind for check in plan.checks) == (
+        CriterionKind.COMMAND_EXIT,
+        CriterionKind.FILE_EXISTS,
+        CriterionKind.FILE_CONTAINS,
+        CriterionKind.GIT_CLEAN,
+    )
 
 
 def test_acceptance_compiler_rejects_unsafe_file_path() -> None:
@@ -52,7 +70,7 @@ def test_acceptance_compiler_rejects_unsafe_file_path() -> None:
         AcceptanceCriteriaCompiler().compile(
             objective,
             frozen_criteria(objective),
-            [{"predicate_id": "tests", "kind": "FILE_EXISTS", "path": "../secret"}],
+            [{"predicate_id": "predicate-1", "kind": "FILE_EXISTS", "path": "../secret"}],
         )
 
 
@@ -96,21 +114,22 @@ def test_integrity_detects_test_bypass_patterns(tmp_path: Path) -> None:
 
 
 class FakeExecutor:
-    def __init__(self) -> None:
+    def __init__(self, output: str = "ok\n") -> None:
         self.commands: list[tuple[str, ...]] = []
+        self.output = output
 
     def execute(self, command: tuple[str, ...], environment: VerificationEnvironment) -> tuple[int, str]:
         self.commands.append(tuple(command))
         assert environment.worker_access is False
-        return 0, "ok\n"
+        return 0, self.output
 
 
-def test_independent_verifier_uses_only_frozen_plan() -> None:
+def test_independent_verifier_uses_only_frozen_plan_and_seals_evidence() -> None:
     objective = "run checks"
     plan = AcceptanceCriteriaCompiler().compile(
         objective,
         frozen_criteria(objective),
-        [{"predicate_id": "tests", "kind": "COMMAND_EXIT", "command": ["pytest", "-q"], "expected_exit_code": 0}],
+        [{"predicate_id": "predicate-1", "kind": "COMMAND_EXIT", "command": ["pytest", "-q"], "expected_exit_code": 0}],
     )
     executor = FakeExecutor()
     report = IndependentVerifier(executor).verify(
@@ -127,6 +146,27 @@ def test_independent_verifier_uses_only_frozen_plan() -> None:
     assert executor.commands == [("pytest", "-q")]
     assert report.verification_results[0].status is VerificationStatus.PASSED
     assert report.verification_results[0].verification_id == "criteria-1:1"
+    assert report.verification_results[0].evidence_refs
+    assert report.evidence[0].output_digest
+
+
+def test_independent_verifier_checks_filesystem_observations(tmp_path: Path) -> None:
+    (tmp_path / "app.py").write_text("def main():\n    return 1\n", encoding="utf-8")
+    objective = "verify repository"
+    specs = [
+        {"predicate_id": "predicate-1", "kind": "FILE_EXISTS", "path": "app.py"},
+        {"predicate_id": "predicate-2", "kind": "FILE_CONTAINS", "path": "app.py", "needle": "def main"},
+    ]
+    criteria = frozen_criteria(objective, kinds=("FILE_EXISTS", "FILE_CONTAINS"))
+    plan = AcceptanceCriteriaCompiler().compile(objective, criteria, specs)
+    report = IndependentVerifier(FakeExecutor()).verify(
+        plan,
+        run_id="run-1",
+        step_id="step-1",
+        attempt_id="attempt-1",
+        environment=VerificationEnvironment(workspace=tmp_path, environment=(), network_enabled=True),
+    )
+    assert [result.status for result in report.verification_results] == [VerificationStatus.PASSED, VerificationStatus.PASSED]
 
 
 def test_anti_gaming_guard_blocks_missing_evidence_and_wrong_verifier() -> None:
