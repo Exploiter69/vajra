@@ -9,17 +9,28 @@ from typing import Any
 
 
 class TrustClass(str, Enum):
-    AUTHORITATIVE = "AUTHORITATIVE"
-    VERIFIED_EVIDENCE = "VERIFIED_EVIDENCE"
-    REPOSITORY_CONTENT = "REPOSITORY_CONTENT"
+    # Normative Phase 8 provenance vocabulary.
+    TRUSTED_SYSTEM = "TRUSTED_SYSTEM"
+    TRUSTED_POLICY = "TRUSTED_POLICY"
+    TRUSTED_VERIFICATION = "TRUSTED_VERIFICATION"
+    OBSERVED_REPOSITORY = "OBSERVED_REPOSITORY"
     MODEL_OUTPUT = "MODEL_OUTPUT"
     WORKER_OUTPUT = "WORKER_OUTPUT"
     EXTERNAL_CONTENT = "EXTERNAL_CONTENT"
-    HISTORICAL = "HISTORICAL"
-    UNTRUSTED_INSTRUCTION = "UNTRUSTED_INSTRUCTION"
+    HISTORICAL_MEMORY = "HISTORICAL_MEMORY"
+    UNKNOWN = "UNKNOWN"
+
+    # Compatibility/clarity aliases used by the broader VAJRA vocabulary.
+    AUTHORITATIVE = "TRUSTED_SYSTEM"
+    VERIFIED_EVIDENCE = "TRUSTED_VERIFICATION"
+    REPOSITORY_CONTENT = "OBSERVED_REPOSITORY"
+    HISTORICAL = "HISTORICAL_MEMORY"
+    UNTRUSTED_INSTRUCTION = "OBSERVED_REPOSITORY"
     GENERATED_SUMMARY = "GENERATED_SUMMARY"
     LOSSY_COMPRESSION = "LOSSY_COMPRESSION"
-    UNKNOWN = "UNKNOWN"
+
+
+ProvenanceClass = TrustClass
 
 
 class SourceKind(str, Enum):
@@ -80,15 +91,10 @@ class ContextItem:
         for name in ("item_id", "locator", "content", "revision", "digest"):
             if not getattr(self, name):
                 raise ValueError(f"{name} must not be empty")
-        if self.trust is TrustClass.AUTHORITATIVE and self.source_kind not in {
-            SourceKind.OBJECTIVE,
-            SourceKind.ACCEPTANCE,
-            SourceKind.EVIDENCE,
-            SourceKind.WORKSPACE_METADATA,
-            SourceKind.RECONCILIATION,
-            SourceKind.CONSTRAINT,
-            SourceKind.CAPABILITY,
-            SourceKind.BUDGET,
+        if self.trust in {TrustClass.TRUSTED_SYSTEM, TrustClass.AUTHORITATIVE} and self.source_kind not in {
+            SourceKind.OBJECTIVE, SourceKind.ACCEPTANCE, SourceKind.EVIDENCE,
+            SourceKind.WORKSPACE_METADATA, SourceKind.RECONCILIATION,
+            SourceKind.CONSTRAINT, SourceKind.CAPABILITY, SourceKind.BUDGET,
         }:
             raise ValueError("repository/model content cannot be authoritative context")
 
@@ -125,26 +131,15 @@ class ContextBundle:
         if any(item.freshness is not Freshness.FRESH for item in self.items):
             raise ValueError("a ContextBundle cannot contain stale or invalid items")
         expected = stable_digest({
-            "bundle_id": self.bundle_id,
-            "run_id": self.run_id,
-            "workspace_id": self.workspace_id,
-            "repository_id": self.repository_id,
-            "revision": self.revision,
-            "filesystem_digest": self.filesystem_digest,
-            "index_digest": self.index_digest,
-            "query": self.query,
-            "items": self.items,
-            "acceptance_criteria": self.acceptance_criteria,
-            "repository_summary": self.repository_summary,
-            "relevant_files": self.relevant_files,
-            "relevant_symbols": self.relevant_symbols,
-            "dependencies": self.dependencies,
-            "recent_changes": self.recent_changes,
-            "relevant_history": self.relevant_history,
-            "current_reconciliation": self.current_reconciliation,
-            "constraints": self.constraints,
-            "allowed_capabilities": self.allowed_capabilities,
-            "budget": self.budget,
+            "bundle_id": self.bundle_id, "run_id": self.run_id, "workspace_id": self.workspace_id,
+            "repository_id": self.repository_id, "revision": self.revision,
+            "filesystem_digest": self.filesystem_digest, "index_digest": self.index_digest,
+            "query": self.query, "items": self.items, "acceptance_criteria": self.acceptance_criteria,
+            "repository_summary": self.repository_summary, "relevant_files": self.relevant_files,
+            "relevant_symbols": self.relevant_symbols, "dependencies": self.dependencies,
+            "recent_changes": self.recent_changes, "relevant_history": self.relevant_history,
+            "current_reconciliation": self.current_reconciliation, "constraints": self.constraints,
+            "allowed_capabilities": self.allowed_capabilities, "budget": self.budget,
         })
         if self.digest != expected:
             raise ValueError("ContextBundle digest mismatch")
@@ -171,13 +166,7 @@ class RepositoryIndex:
     digest: str
 
     def __post_init__(self) -> None:
-        expected = stable_digest({
-            "root": self.root,
-            "revision": self.revision,
-            "filesystem_digest": self.filesystem_digest,
-            "files": self.files,
-            "history": self.history,
-        })
+        expected = stable_digest({"root": self.root, "revision": self.revision, "filesystem_digest": self.filesystem_digest, "files": self.files, "history": self.history})
         if self.digest != expected:
             raise ValueError("RepositoryIndex digest mismatch")
 
@@ -191,5 +180,5 @@ class RetrievalHit:
 
 __all__ = [
     "ContextItem", "ContextBundle", "Freshness", "IndexFile", "RepositoryIndex",
-    "RetrievalHit", "SourceKind", "TrustClass", "stable_digest",
+    "RetrievalHit", "SourceKind", "TrustClass", "ProvenanceClass", "stable_digest",
 ]
