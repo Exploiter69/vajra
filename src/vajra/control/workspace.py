@@ -6,12 +6,13 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from time import monotonic, sleep
+from typing import Iterator
 
 from vajra.domain import Checkpoint
 
+from .contracts import WorktreeContract, stable_digest
 from .reality import filesystem_digest
 from .worktree import WorktreeError, WorktreeInspection, WorktreeManager
-from .contracts import WorktreeContract, stable_digest
 
 
 @dataclass(frozen=True)
@@ -23,7 +24,7 @@ class WorkspaceRecord:
     base_revision: str
     path: str
     owner_token: str
-    status: str = "ACTIVE"
+    status: str = "OWNED"
     cleanup_state: str = "RETAINED"
     checkpoint_ref: str | None = None
     git_concurrency_key: str = ""
@@ -95,7 +96,9 @@ class WorkspaceManager:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = asdict(record)
         payload["record_digest"] = stable_digest({k: v for k, v in payload.items() if k != "record_digest"})
-        path.write_text(json.dumps(payload, sort_keys=True, indent=2), encoding="utf-8")
+        temp = path.with_suffix(".tmp")
+        temp.write_text(json.dumps(payload, sort_keys=True, indent=2), encoding="utf-8")
+        temp.replace(path)
 
     def load(self, workspace_id: str) -> WorkspaceRecord:
         path = self._record_path(workspace_id)
@@ -106,56 +109,57 @@ class WorkspaceManager:
         return WorkspaceRecord(**payload)
 
     @contextmanager
-    def git_lock(self, repository_id: str):
+    def git_lock(self, repository_id: str) -> Iterator[None]:
         with GitSerialization(self._locks, repository_id):
             yield
 
-    def create(
-        self,
-        *,
-        run_id: str,
-        repository_id: str,
-        repository: str | Path,
-        base_revision: str,
-        workspace_id: str,
-        path: str | Path,
-    ) -> WorkspaceRecord:
+    def create(self, *, run_id: str, repository_id: str, repository: str | Path,
+               base_revision: str, workspace_id: str, path: str | Path) -> WorkspaceRecord:
         with self.git_lock(repository_id):
             contract = self._worktrees.create(
-                run_id=run_id,
-                repository_id=repository_id,
-                repository=repository,
-                base_revision=base_revision,
-                workspace_id=workspace_id,
-                path=path,
+                run_id=run_id, repository_id=repository_id, repository=repository,
+                base_revision=base_revision, workspace_id=workspace_id, path=path,
             )
             record = WorkspaceRecord(
-                workspace_id=workspace_id,
-                run_id=run_id,
-                repository_id=repository_id,
-                repository=str(Path(repository).expanduser().resolve()),
-                base_revision=contract.base_revision,
-                path=contract.path,
-                owner_token=contract.owner_token,
-                git_concurrency_key=repository_id,
+                workspace_id=workspace_id, run_id=run_id, repository_id=repository_id,
+                repository=str(Path(repository).expanduser().resolve()), base_revision=contract.base_revision,
+                path=contract.path, owner_token=contract.owner_token, git_concurrency_key=repository_id,
             )
             self._write(record)
-            return record
+            return self.load(workspace_id)
+
+    def assert_owned(self, workspace_id: str, *, run_id: str, owner_token: str) -> WorkspaceRecord:
+        record = self.load(workspace_id)
+        if record.status not in {"OWNED", "IN_USE", "RELEASED"}:
+            raise WorktreeError(f"workspace is not usable: {record.status}")
+        if record.run_id != run_id or record.owner_token != owner_token:
+            raise WorktreeError("workspace ownership mismatch")
+        return record
+
+    @contextmanager
+    def use(self, workspace_id: str, *, run_id: str, owner_token: str) -> Iterator[Path]:
+        record = self.assert_owned(workspace_id, run_id=run_id, owner_token=owner_token)
+        if record.status == "RELEASED":
+            raise WorktreeError("released workspace cannot be reused")
+        self._write(WorkspaceRecord(**{**asdict(record), "status": "IN_USE"}))
+        try:
+            yield Path(record.path)
+        finally:
+            current = self.load(workspace_id)
+            if current.status == "IN_USE":
+                self._write(WorkspaceRecord(**{**asdict(current), "status": "OWNED"}))
 
     def inspect(self, workspace_id: str) -> WorktreeInspection:
         record = self.load(workspace_id)
         contract = WorktreeContract(
-            workspace_id=record.workspace_id,
-            run_id=record.run_id,
-            repository_id=record.repository_id,
-            base_revision=record.base_revision,
-            path=record.path,
-            owner_token=record.owner_token,
-            clean_at_creation=True,
-            git_status_digest=stable_digest(""),
+            workspace_id=record.workspace_id, run_id=record.run_id, repository_id=record.repository_id,
+            base_revision=record.base_revision, path=record.path, owner_token=record.owner_token,
+            clean_at_creation=True, git_status_digest=stable_digest(""),
         )
-        inspection = self._worktrees.inspect(contract)
-        return inspection
+        return self._worktrees.inspect(contract)
+
+    def reconcile(self, workspace_id: str, expected_revision: str | None = None) -> WorkspaceRecovery:
+        return self.recover(workspace_id, expected_revision=expected_revision)
 
     def attach_checkpoint(self, checkpoint: Checkpoint) -> WorkspaceRecord:
         record = self.load(checkpoint.workspace_identity)
@@ -164,6 +168,15 @@ class WorkspaceManager:
         updated = WorkspaceRecord(**{**asdict(record), "checkpoint_ref": checkpoint.checkpoint_id})
         self._write(updated)
         return self.load(record.workspace_id)
+
+    def release(self, workspace_id: str, *, run_id: str, owner_token: str) -> WorkspaceRecord:
+        record = self.assert_owned(workspace_id, run_id=run_id, owner_token=owner_token)
+        inspection = self.inspect(workspace_id)
+        if not inspection.clean:
+            raise WorktreeError("cannot release dirty workspace")
+        updated = WorkspaceRecord(**{**asdict(record), "status": "RELEASED"})
+        self._write(updated)
+        return self.load(workspace_id)
 
     def recover(self, workspace_id: str, expected_revision: str | None = None) -> WorkspaceRecovery:
         record = self.load(workspace_id)
@@ -187,14 +200,9 @@ class WorkspaceManager:
             if not inspection.clean and not discard:
                 raise WorktreeError("refusing to clean dirty workspace without discard=True")
             contract = WorktreeContract(
-                workspace_id=record.workspace_id,
-                run_id=record.run_id,
-                repository_id=record.repository_id,
-                base_revision=record.base_revision,
-                path=record.path,
-                owner_token=record.owner_token,
-                clean_at_creation=True,
-                git_status_digest=stable_digest(""),
+                workspace_id=record.workspace_id, run_id=record.run_id, repository_id=record.repository_id,
+                base_revision=record.base_revision, path=record.path, owner_token=record.owner_token,
+                clean_at_creation=True, git_status_digest=stable_digest(""),
             )
             self._worktrees.remove(repository=record.repository, contract=contract, owner_token=record.owner_token)
             updated = WorkspaceRecord(**{**asdict(record), "status": "REMOVED", "cleanup_state": "DISCARDED" if discard else "CLEANED"})
