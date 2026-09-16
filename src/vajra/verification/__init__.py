@@ -1,6 +1,7 @@
 from .anti_gaming import AntiGamingGuard, AntiGamingReport, AntiGamingStatus
 from .contracts import VerificationRequest, Verifier
 from .environment import VerificationEnvironment, VerificationEnvironmentError, VerificationExecutor
+from .evidence import VerificationEvidence, VerificationEvidenceBuilder
 from .independent import IndependentVerificationReport, IndependentVerifier, SubprocessVerificationExecutor
 from .integrity import IntegrityReport, IntegrityViolation, TestIntegrityAuditor
 from .plan import AcceptanceCriteriaCompiler, CriterionKind, FrozenVerificationPlan
@@ -20,6 +21,8 @@ __all__ = [
     "TestIntegrityAuditor",
     "VerificationEnvironment",
     "VerificationEnvironmentError",
+    "VerificationEvidence",
+    "VerificationEvidenceBuilder",
     "VerificationExecutor",
     "VerificationRequest",
     "Verifier",
