@@ -14,6 +14,7 @@ from .contracts import (
 )
 from .reality import RealityObserver, filesystem_digest, stable_digest
 from .worktree import WorktreeError, WorktreeInspection, WorktreeManager
+from .workspace import GitSerialization, WorkspaceManager, WorkspaceRecord, WorkspaceRecovery
 
 __all__ = [
     "AcceptanceCriteria",
@@ -34,4 +35,8 @@ __all__ = [
     "WorktreeError",
     "WorktreeInspection",
     "WorktreeManager",
+    "GitSerialization",
+    "WorkspaceManager",
+    "WorkspaceRecord",
+    "WorkspaceRecovery",
 ]
