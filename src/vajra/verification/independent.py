@@ -2,18 +2,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
 from vajra.domain.models import VerificationResult, VerificationStatus
 from vajra.verification.command import CommandVerifier
 from vajra.verification.contracts import VerificationRequest
 from vajra.verification.environment import VerificationEnvironment, VerificationExecutor
+from vajra.verification.evidence import VerificationEvidence, VerificationEvidenceBuilder
 from vajra.verification.plan import CriterionKind, FrozenVerificationPlan
 
 
 @dataclass(frozen=True)
 class IndependentVerificationReport:
     verification_results: tuple[VerificationResult, ...]
+    evidence: tuple[VerificationEvidence, ...]
     output: tuple[str, ...]
 
 
@@ -24,6 +26,7 @@ class IndependentVerifier:
 
     def __init__(self, executor: VerificationExecutor) -> None:
         self._executor = executor
+        self._evidence = VerificationEvidenceBuilder()
 
     def verify(
         self,
@@ -35,6 +38,7 @@ class IndependentVerifier:
         environment: VerificationEnvironment,
     ) -> IndependentVerificationReport:
         results: list[VerificationResult] = []
+        evidence: list[VerificationEvidence] = []
         outputs: list[str] = []
         for check in plan.checks:
             parameters = dict(check.parameters)
@@ -43,6 +47,7 @@ class IndependentVerifier:
                 results.append(result)
                 outputs.append("")
                 continue
+
             command = parameters["command"]
             expected = parameters["expected_exit_code"]
             exit_code, output = self._executor.execute(command, environment)
@@ -60,8 +65,28 @@ class IndependentVerifier:
                     "plan_digest": plan.integrity_digest,
                 },
             )
-            results.append(CommandVerifier().verify(request))
-        return IndependentVerificationReport(tuple(results), tuple(outputs))
+            result = CommandVerifier().verify(request)
+            sealed = self._evidence.build(
+                result,
+                check_id=check.check_id,
+                command=tuple(command),
+                exit_code=exit_code,
+                output_reference=f"memory://verification/{check.check_id}",
+                output=output,
+                environment=environment.env_dict(),
+            )
+            evidence.append(sealed)
+            results.append(
+                VerificationResult(
+                    verification_id=result.verification_id,
+                    run_id=result.run_id,
+                    status=result.status,
+                    checks=result.checks,
+                    evidence_refs=(sealed.evidence_ref,),
+                    verifier_version=result.verifier_version,
+                )
+            )
+        return IndependentVerificationReport(tuple(results), tuple(evidence), tuple(outputs))
 
     @staticmethod
     def _unsupported_check(check_id: str, run_id: str, reason: str) -> VerificationResult:
