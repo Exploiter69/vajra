@@ -2,7 +2,11 @@
 
 ## Status
 
-**Implementation complete; validation gate pending local execution.**
+**COMPLETE / VALIDATED / CLOSED**
+
+Validated through the repository's free GitHub Actions validation path on
+2026-09-16. The local-only gVisor integration tests remain environment-specific;
+Gate D already has separate physical gVisor validation from Phase 6.
 
 Phase 10 is the first autonomous engineering milestone in the roadmap. The
 roadmap defines the loop as:
@@ -91,7 +95,8 @@ as proof. Verification evidence is persisted into canonical Run state.
 Phase 10 records pre/post workspace digests, verification counts, artifact
 references and evidence references. The existing `BoundedAutonomy` layer is
 fed a deterministic `ProgressObservation`, so repeated non-progress can halt
-the loop rather than creating an infinite retry cycle.
+the loop rather than creating an infinite retry cycle. Strategy-loop accounting
+is performed at observable progress boundaries rather than on lifecycle polling.
 
 ### Decide next step
 
@@ -141,9 +146,24 @@ Phase 10 does **not** weaken any earlier architectural law:
 5. the loop obeys its hard cycle bound;
 6. the durable control-plane trace records all major Phase 10 stages.
 
-## Gate
+## Validation evidence
 
-The implementation is not declared Phase 10 **CLOSED** until the repository's
-full test suite, Phase 10 tests, compile check and diff check are run locally
-and the working tree is clean. This preserves the same evidence standard used
-for Gates F and Phase 9.
+The final validation workflow passed on commit `1ae4e87277e252851185a4686e75c3a5f7bbb63e`:
+
+- Phase 10 tests: **6 passed**
+- Portable full suite: **578 passed, 4 deselected** (`gvisor_integration`)
+- compileall: **PASS**
+- git diff --check: **PASS**
+- CI job: **SUCCESS**
+
+The four deselected gVisor integration tests require the physical gVisor/`runsc`
+environment already validated independently in Phase 6 Gate D. The portable
+suite therefore does not silently treat an unavailable CI sandbox as proof of
+sandbox behavior.
+
+## Closure rule
+
+Phase 10 is now **CLOSED**. No Phase 10 loop is enabled implicitly by this
+implementation: callers must explicitly construct `AutonomousEngineeringLoop`
+and provide the required policy, broker, verifier, workspace, budget and
+reasoning boundaries.
