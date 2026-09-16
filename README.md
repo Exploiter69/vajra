@@ -1,102 +1,76 @@
 # VAJRA
 
-VAJRA is a local-first, model-agnostic autonomous engineering runtime designed around durable Engineering Runs, trusted execution, isolated workspaces, deterministic policy, verification, recovery, persistent engineering memory, and human control.
+VAJRA is a local-first, model-agnostic autonomous engineering runtime built around durable Engineering Runs, trusted execution, isolated workspaces, deterministic policy, independent verification, recovery, and human control.
 
 VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot, model-hosting platform, or collection of shell scripts.
 
 ## Current Status
 
-**VAJRA v0.1.0 — Phase 6 complete**
+**Phase 10 — Real Autonomous Engineering Loop: implementation complete; validation gate pending local execution.**
 
-The Phase 6 implementation baseline is frozen at commit `fb3cca5` and tagged `v0.1.0`.
+Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming.
 
-**Phase 6 final integration gate:** PASS  
-**Test suite at freeze:** 419 passed  
-**Working tree at freeze:** clean  
-**Operating-cost constraint:** ₹0.00
-
-The v0.1.0 baseline is a hardened runtime foundation. It is **not yet the complete autonomous engineering loop**. The next implementation work is post-v0 operationalization: wiring context, model reasoning, intent generation, execution, verification, and recovery into a durable end-to-end engineering controller.
-
-### Gate Status
-
-| Gate | Property | Status |
-|---|---|---|
-| A | Durable Recovery | PASS |
-| B | Needle Benchmark | REJECT / DROP NEEDLE |
-| C | Oracle → Kaggle Worker Lifecycle | PASS WITH INFRASTRUCTURE LIMITATION |
-| D | Sandbox Isolation | PASS — gVisor selected for v0 |
-| E | ASTRA Safety Extraction | PASS WITH LIMITATIONS |
-
-Gate C is accepted on deterministic Oracle-control lifecycle evidence plus a physical Laptop → Kaggle worker path. An Oracle VM was not available, so an Oracle-hosted deployment itself was not claimed as physically proven.
-
-Gate D selected gVisor through Docker/runsc for the v0 sandbox boundary. Firecracker was not selected because guest boot/isolation could not be proven in the available environment. The SandboxBackend abstraction remains mandatory.
-
-## What v0.1.0 Contains
-
-- Core domain contracts
-- Engineering Run lifecycle
-- Durable runtime abstraction and restart-capable reference runtime
-- Durable Steps and disposable Attempts
-- Worker Job/Result protocol
-- Lease and fencing authority
-- Worker-result acceptance boundary
-- Deterministic Policy Engine
-- Execution Broker
-- Bounded workspace file/process/Git execution boundaries
-- Independent verification
-- Structured verification evidence
-- Failure classification and recovery policy
-- Retry, strategy/model/worker recovery actions
-- Checkpoints and reconciliation
-- Human escalation and Run abort control
-- CLI human control surface
-- gVisor sandbox backend and security validation
-- Kaggle worker integration path
-- Comprehensive automated test coverage
-
-## Architecture
-
-The fundamental guarantee is:
-
-> A worker, model, process, network connection, or machine may disappear without destroying the Engineering Run.
-
-Canonical state belongs to VAJRA, not to models or workers.
+Phase 10 now wires those primitives into the first real objective-to-evidence loop:
 
 ```text
 OBJECTIVE
-    │
-    ▼
+   ↓
+ORIENT
+   ↓
 CONTEXT
-    │
-    ▼
-MODEL / REASONING
-    │ proposes
-    ▼
+   ↓
+PLAN
+   ↓
 INTENT
-    │ authorize
-    ▼
+   ↓
 POLICY
-    │ permits
-    ▼
-EXECUTION BROKER
-    │
-    ▼
-SANDBOX / WORKSPACE
-    │
-    ▼
-ARTIFACT
-    │ independently verify
-    ▼
-VERIFICATION
-    │ produces
-    ▼
-EVIDENCE
-    │
-    ▼
-NEXT STEP / RECOVERY / COMPLETION
+   ↓
+EXECUTE
+   ↓
+OBSERVE
+   ↓
+VERIFY
+   ↓
+MEASURE PROGRESS
+   ↓
+DECIDE NEXT STEP
+   ↓
+repeat / recover / human / complete
 ```
 
-The model is inside VAJRA, never above VAJRA. Reasoning proposes; policy authorizes; the Execution Broker executes; verification independently establishes evidence.
+**Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a Phase 10 dependency.
+
+Phase 10 is not declared CLOSED until the Phase 10 tests, full suite, compile check, diff check, and clean working-tree validation have been run locally.
+
+## Phase 10 implementation
+
+- `src/vajra/autonomy/contracts.py` — structured plans, planned intents, progress measurements, reasoning boundary
+- `src/vajra/autonomy/loop.py` — bounded autonomous engineering controller
+- `tests/autonomy/test_phase10_loop.py` — end-to-end and safety coverage
+- `docs/PHASE_10_IMPLEMENTATION.md` — roadmap-to-implementation mapping
+
+The loop preserves the architectural boundary:
+
+> Model proposes → VAJRA decides → Policy authorizes → Broker executes → Sandbox/Workspace contains → Verifier proves → VAJRA records → Controller decides what happens next.
+
+## What Phase 10 adds
+
+- fresh context before reasoning;
+- context-bound structured plans;
+- proposal-only reasoning provider;
+- durable Run/Step/Attempt identities;
+- policy authorization before every execution intent;
+- broker-only execution;
+- worker lease/result acceptance and fencing;
+- independently frozen verification;
+- durable verification/evidence recording;
+- workspace artifact identity;
+- deterministic progress measurement;
+- bounded no-progress / retry protection;
+- recovery-driven re-planning;
+- explicit human escalation;
+- hard cycle and resource termination;
+- evidence-bound promotion and completion.
 
 ## Architectural Laws
 
@@ -114,12 +88,14 @@ The model is inside VAJRA, never above VAJRA. Reasoning proposes; policy authori
 ## Repository Documentation
 
 - `docs/VAJRA_v0_Technical_Specification.txt` — canonical v0 architecture/specification
-- `docs/CURRENT_STATE.md` — current implementation and gate status
-- `docs/MASTER_CONTEXT.md` — project context and continuity
-- `docs/DECISIONS.md` — accepted architectural decisions
-- `docs/ROADMAP.md` — implementation roadmap
-- `docs/AI_HANDOFF.md` — AI-assisted development handoff
+- `docs/VAJRA_v1_Architecture_and_Roadmap_Specification.md` — converged roadmap
+- `docs/CURRENT_STATE.md` — implementation/gate state
+- `docs/PHASE_7_DESIGN_FREEZE.md` — Phase 7 safety/control design freeze
+- `docs/PHASE_8_IMPLEMENTATION.md` — context/workspace implementation
+- `docs/PHASE_9_IMPLEMENTATION.md` — verification/anti-gaming implementation
+- `docs/PHASE_9_GATE_RESULT.md` — Phase 9 closure record
+- `docs/PHASE_10_IMPLEMENTATION.md` — Phase 10 implementation and validation gate
 
 ## Frozen Baseline
 
-`v0.1.0` is the Phase 6 completion baseline. Do not rewrite, delete, or retag it. Subsequent work proceeds from `main` as post-v0 operationalization while preserving the architectural laws and the v0 specification.
+`v0.1.0` / `fb3cca5` remains the immutable Phase 6 baseline. Later work proceeds on `main` without rewriting or retagging that baseline.
