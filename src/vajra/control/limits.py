@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
-from vajra.domain import Budget, EngineeringRun, RunState
+from vajra.domain import Budget, EngineeringRun
 from vajra.recovery.budget import BudgetAssessment, BudgetEnforcer, BudgetUsage
 from vajra.recovery.progress import (
     NoProgressDetector,
@@ -33,7 +33,13 @@ class LimitDecision:
 
 
 class BoundedAutonomy:
-    """Control-plane boundary for bounded autonomous continuation."""
+    """
+    Control-plane boundary for bounded autonomous continuation.
+
+    This layer evaluates existing budget and no-progress mechanisms. It does
+    not execute work, mutate Run state, authorize transitions, or approve
+    recovery actions.
+    """
 
     def __init__(
         self,
@@ -56,55 +62,66 @@ class BoundedAutonomy:
         strategy_id: str | None = None,
         now=None,
     ) -> LimitDecision:
-        budget_assessment = self._budget.assess(run, budget, usage, now=now)
+        budget_assessment = self._budget.assess(
+            run,
+            budget,
+            usage,
+            now=now,
+        )
+
         if budget_assessment.exhausted:
-            return LimitDecision(LimitAction.ABORT, "hard budget limit exhausted", DivergenceClass.BUDGET_DIVERGENCE, budget_assessment)
+            return LimitDecision(
+                action=LimitAction.ABORT,
+                reason="hard budget limit exhausted",
+                divergence=DivergenceClass.BUDGET_DIVERGENCE,
+                budget=budget_assessment,
+            )
 
         progress_assessment = None
         strategy_assessment = None
-        # Lifecycle polling is not a strategy iteration. Existing Gate F
-        # callers historically use CREATED runs without a progress observation;
-        # preserve that contract while preventing Phase 10 state ticks from
-        # consuming anti-loop budget. Observable iterations are counted at the
-        # progress boundary.
-        observe_strategy = strategy_id is not None and (
-            progress is not None or run.state is RunState.CREATED
-        )
-        if observe_strategy:
+
+        if strategy_id is not None:
             strategy_assessment = self._strategy.observe(
                 run_id=run.run_id,
                 step_id=progress.step_id if progress is not None else "__run__",
                 strategy_id=strategy_id,
             )
+
             if strategy_assessment.anti_loop:
                 return LimitDecision(
-                    LimitAction.WAIT_HUMAN,
-                    "strategy loop threshold reached",
-                    DivergenceClass.UNKNOWN,
-                    budget_assessment,
+                    action=LimitAction.WAIT_HUMAN,
+                    reason="strategy loop threshold reached",
+                    divergence=DivergenceClass.UNKNOWN,
+                    budget=budget_assessment,
+                    progress=progress_assessment,
                     strategy=strategy_assessment,
                 )
 
         if progress is not None:
             progress_assessment = self._progress.observe(progress)
+
             if progress_assessment.no_progress:
                 return LimitDecision(
-                    LimitAction.WAIT_HUMAN,
-                    "no-progress threshold reached",
-                    DivergenceClass.UNKNOWN,
-                    budget_assessment,
+                    action=LimitAction.WAIT_HUMAN,
+                    reason="no-progress threshold reached",
+                    divergence=DivergenceClass.UNKNOWN,
+                    budget=budget_assessment,
                     progress=progress_assessment,
                     strategy=strategy_assessment,
                 )
 
         return LimitDecision(
-            LimitAction.CONTINUE,
-            "bounded continuation permitted",
-            DivergenceClass.NONE,
-            budget_assessment,
-            progress_assessment,
-            strategy_assessment,
+            action=LimitAction.CONTINUE,
+            reason="bounded continuation permitted",
+            divergence=DivergenceClass.NONE,
+            budget=budget_assessment,
+            progress=progress_assessment,
+            strategy=strategy_assessment,
         )
 
 
-__all__ = ["BoundedAutonomy", "LimitAction", "LimitDecision"]
+__all__ = [
+    "BoundedAutonomy",
+    "LimitAction",
+    "LimitDecision",
+]
