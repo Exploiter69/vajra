@@ -100,6 +100,13 @@ class WorkspaceManager:
         temp.write_text(json.dumps(payload, sort_keys=True, indent=2), encoding="utf-8")
         temp.replace(path)
 
+    @staticmethod
+    def _updated(record: WorkspaceRecord, **changes: object) -> WorkspaceRecord:
+        payload = asdict(record)
+        payload.update(changes)
+        payload["record_digest"] = ""
+        return WorkspaceRecord(**payload)
+
     def load(self, workspace_id: str) -> WorkspaceRecord:
         path = self._record_path(workspace_id)
         try:
@@ -141,13 +148,13 @@ class WorkspaceManager:
         record = self.assert_owned(workspace_id, run_id=run_id, owner_token=owner_token)
         if record.status == "RELEASED":
             raise WorktreeError("released workspace cannot be reused")
-        self._write(WorkspaceRecord(**{**asdict(record), "status": "IN_USE"}))
+        self._write(self._updated(record, status="IN_USE"))
         try:
             yield Path(record.path)
         finally:
             current = self.load(workspace_id)
             if current.status == "IN_USE":
-                self._write(WorkspaceRecord(**{**asdict(current), "status": "OWNED"}))
+                self._write(self._updated(current, status="OWNED"))
 
     def inspect(self, workspace_id: str) -> WorktreeInspection:
         record = self.load(workspace_id)
@@ -165,7 +172,7 @@ class WorkspaceManager:
         record = self.load(checkpoint.workspace_identity)
         if record.run_id != checkpoint.run_id:
             raise WorktreeError("checkpoint run does not own workspace")
-        updated = WorkspaceRecord(**{**asdict(record), "checkpoint_ref": checkpoint.checkpoint_id})
+        updated = self._updated(record, checkpoint_ref=checkpoint.checkpoint_id)
         self._write(updated)
         return self.load(record.workspace_id)
 
@@ -174,7 +181,7 @@ class WorkspaceManager:
         inspection = self.inspect(workspace_id)
         if not inspection.clean:
             raise WorktreeError("cannot release dirty workspace")
-        updated = WorkspaceRecord(**{**asdict(record), "status": "RELEASED"})
+        updated = self._updated(record, status="RELEASED")
         self._write(updated)
         return self.load(workspace_id)
 
@@ -205,7 +212,7 @@ class WorkspaceManager:
                 clean_at_creation=True, git_status_digest=stable_digest(""),
             )
             self._worktrees.remove(repository=record.repository, contract=contract, owner_token=record.owner_token)
-            updated = WorkspaceRecord(**{**asdict(record), "status": "REMOVED", "cleanup_state": "DISCARDED" if discard else "CLEANED"})
+            updated = self._updated(record, status="REMOVED", cleanup_state="DISCARDED" if discard else "CLEANED")
             self._write(updated)
             return self.load(workspace_id)
 
