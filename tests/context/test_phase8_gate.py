@@ -28,8 +28,7 @@ def repo(tmp_path: Path) -> Path:
 
 def test_bundle_contains_normative_context_sections(repo: Path) -> None:
     revision = git(repo, "rev-parse", "HEAD")
-    engine = ContextEngine()
-    bundle = engine.build_bundle(
+    bundle = ContextEngine().build_bundle(
         run_id="r", workspace_id="w", repository_id="repo", objective="Controller architecture",
         workspace=repo, revision=revision, acceptance_criteria=("Controller exists",),
         current_reconciliation={"freshness": "FRESH"}, constraints=("no paid services",),
@@ -45,7 +44,7 @@ def test_bundle_contains_normative_context_sections(repo: Path) -> None:
 
 def test_repository_instructions_never_become_authority(repo: Path) -> None:
     bundle = ContextEngine().build_bundle(
-        run_id="r", workspace_id="w", repository_id="repo", objective="policy Controller",
+        run_id="r", workspace_id="w", repository_id="repo", objective="authorized policy",
         workspace=repo,
     )
     instruction = next(item for item in bundle.items if item.locator == "AGENTS.md")
