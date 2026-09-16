@@ -119,6 +119,8 @@ class AcceptanceCriteriaCompiler:
             if not isinstance(expected, int):
                 raise ValueError("COMMAND_EXIT requires integer expected_exit_code")
             return {"command": tuple(command), "expected_exit_code": expected}
+        if kind is CriterionKind.GIT_CLEAN:
+            return {}
         path = specification.get("path")
         if not isinstance(path, str) or not path or path.startswith("/") or ".." in path.split("/"):
             raise ValueError("file criteria require a safe relative path")
@@ -129,6 +131,4 @@ class AcceptanceCriteriaCompiler:
             if not isinstance(needle, str) or not needle:
                 raise ValueError("FILE_CONTAINS requires a non-empty needle")
             return {"path": path, "needle": needle}
-        if kind is CriterionKind.GIT_CLEAN:
-            return {}
         raise ValueError(f"unsupported criterion kind: {kind.value}")
