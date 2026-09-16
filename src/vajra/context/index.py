@@ -89,9 +89,35 @@ class RepositoryIndexer:
         files.sort(key=lambda item: item.path)
         fs_digest = stable_digest([(f.path, f.digest, f.size) for f in files])
         history = tuple(self._git(path, "log", f"-{self.config.max_history}", "--format=%H %s").splitlines())
-        payload = {"root": str(path), "revision": actual_revision, "filesystem_digest": fs_digest, "files": files, "history": history}
+        module_map = self._module_map(files)
+        dependency_edges: set[tuple[str, str]] = set()
+        for item in files:
+            for dependency in item.dependencies:
+                target = module_map.get(dependency)
+                if target and target != item.path:
+                    dependency_edges.add((item.path, target))
+        symbol_locations = tuple(sorted((symbol, item.path) for item in files for symbol in item.symbols))
+        payload = {
+            "root": str(path), "revision": actual_revision, "filesystem_digest": fs_digest,
+            "files": files, "history": history, "dependency_edges": tuple(sorted(dependency_edges)),
+            "symbol_locations": symbol_locations,
+        }
         return RepositoryIndex(root=str(path), revision=actual_revision, filesystem_digest=fs_digest,
-                               files=tuple(files), history=history, digest=stable_digest(payload))
+                               files=tuple(files), history=history, digest=stable_digest(payload),
+                               dependency_edges=tuple(sorted(dependency_edges)), symbol_locations=symbol_locations)
+
+    @staticmethod
+    def _module_map(files: list[IndexFile]) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for item in files:
+            if not item.path.endswith((".py", ".pyi")):
+                continue
+            path = item.path[:-3]
+            if path.endswith("/__init__"):
+                path = path[:-9]
+            result[path.replace("/", ".")] = item.path
+            result[Path(item.path).stem] = item.path
+        return result
 
     @staticmethod
     def _extract(text: str, language: str) -> tuple[set[str], set[str], set[str]]:
