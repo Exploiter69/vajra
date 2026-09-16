@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -34,6 +36,25 @@ class ReconciliationDisposition(str, Enum):
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _canonical(value: Any) -> Any:
+    if isinstance(value, Enum):
+        return value.value
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc).isoformat()
+    if isinstance(value, dict):
+        return {str(k): _canonical(v) for k, v in sorted(value.items(), key=lambda item: str(item[0]))}
+    if isinstance(value, (tuple, list)):
+        return [_canonical(item) for item in value]
+    if hasattr(value, "__dataclass_fields__"):
+        return _canonical({key: getattr(value, key) for key in value.__dataclass_fields__})
+    return value
+
+
+def stable_digest(value: Any) -> str:
+    payload = json.dumps(_canonical(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _require_nonempty(value: str, field_name: str) -> None:
@@ -277,4 +298,5 @@ __all__ = [
     "ReconciliationDisposition",
     "ReconciliationReport",
     "WorktreeContract",
+    "stable_digest",
 ]
