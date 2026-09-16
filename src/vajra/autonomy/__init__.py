@@ -6,7 +6,7 @@ from .contracts import (
     ProgressMeasurement,
     ReasoningProvider,
 )
-from .loop import AutonomousEngineeringLoop, AutonomousLoopError
+from .loop import AutonomousEngineeringLoop, AutonomousLoopError, WorkspaceRuntime
 
 __all__ = [
     "AutonomousEngineeringLoop",
@@ -17,4 +17,5 @@ __all__ = [
     "PlannedIntent",
     "ProgressMeasurement",
     "ReasoningProvider",
+    "WorkspaceRuntime",
 ]
