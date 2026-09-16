@@ -58,11 +58,7 @@ class _RunStateRecorder:
             run.verification_results.extend(results)
             try:
                 self._state.save_run(run)
-                self._append(run_id, "VERIFICATION_RECORDED", {
-                    "verification_ids": [r.verification_id for r in results],
-                    "evidence_ids": [e.evidence_ref.evidence_id for e in evidence],
-                    "verifier_versions": sorted({r.verifier_version for r in results}),
-                })
+                self._append(run_id, "VERIFICATION_RECORDED", {"verification_ids": [r.verification_id for r in results], "evidence_ids": [e.evidence_ref.evidence_id for e in evidence], "verifier_versions": sorted({r.verifier_version for r in results})})
             except Exception:
                 self._state.save_run(previous)
                 raise
@@ -74,12 +70,7 @@ class _RunStateRecorder:
             run.artifacts.append(artifact)
             try:
                 self._state.save_run(run)
-                self._append(run_id, "ARTIFACT_RECORDED", {
-                    "artifact_id": artifact.artifact_id,
-                    "kind": artifact.kind,
-                    "location": artifact.location,
-                    "sha256": artifact.sha256,
-                })
+                self._append(run_id, "ARTIFACT_RECORDED", {"artifact_id": artifact.artifact_id, "kind": artifact.kind, "location": artifact.location, "sha256": artifact.sha256})
             except Exception:
                 self._state.save_run(previous)
                 raise
@@ -89,14 +80,7 @@ class _RunStateRecorder:
             self._append(run_id, f"AUTONOMY_{phase.value}", payload)
 
     def _append(self, run_id: str, event_type: str, payload: dict[str, object]) -> Event:
-        event = Event(
-            event_id=str(uuid4()),
-            run_id=run_id,
-            event_type=event_type,
-            timestamp=datetime.now(timezone.utc),
-            sequence=self._events.next_sequence(run_id),
-            payload=payload,
-        )
+        event = Event(event_id=str(uuid4()), run_id=run_id, event_type=event_type, timestamp=datetime.now(timezone.utc), sequence=self._events.next_sequence(run_id), payload=payload)
         return self._events.append(event)
 
 
@@ -105,12 +89,7 @@ class AutonomousEngineeringLoop:
 
     VERSION = "autonomous-engineering-loop-v1"
 
-    def __init__(self, *, run_manager, state_store: StateStore, event_store: EventStore, context_engine: ContextEngine,
-                 controller: Controller, policy: PolicyEvaluator, broker: ExecutionBroker, verifier: IndependentVerifier,
-                 reasoning: ReasoningProvider, acceptance, verification_plan: FrozenVerificationPlan,
-                 verification_environment: VerificationEnvironment, workspace: WorkspaceRuntime, budget,
-                 bounded_autonomy: BoundedAutonomy | None = None, observer=None, max_cycles: int = 32,
-                 lease_ttl_seconds: int = 300) -> None:
+    def __init__(self, *, run_manager, state_store: StateStore, event_store: EventStore, context_engine: ContextEngine, controller: Controller, policy: PolicyEvaluator, broker: ExecutionBroker, verifier: IndependentVerifier, reasoning: ReasoningProvider, acceptance, verification_plan: FrozenVerificationPlan, verification_environment: VerificationEnvironment, workspace: WorkspaceRuntime, budget, bounded_autonomy: BoundedAutonomy | None = None, observer=None, max_cycles: int = 32, lease_ttl_seconds: int = 300) -> None:
         if max_cycles <= 0 or lease_ttl_seconds <= 0:
             raise ValueError("max_cycles and lease_ttl_seconds must be positive")
         if acceptance.objective_digest != verification_plan.objective_digest:
@@ -155,7 +134,7 @@ class AutonomousEngineeringLoop:
             if run.state is RunState.WAITING_HUMAN:
                 return LoopResult(run_id, LoopPhase.WAIT_HUMAN, cycle, False, True, False, "human authority required", tuple(self._progress))
 
-            limit = self._bounded.assess(run, self._budget, strategy_id=self._plan.strategy_id if self._plan else None)
+            limit = self._bounded.assess(run, self._budget)
             if limit.action is LimitAction.ABORT:
                 if run.state is not RunState.RECOVERING:
                     self.run_manager.recover_run(run_id)
