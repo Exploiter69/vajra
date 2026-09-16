@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
+from typing import Any
 
 from vajra.control.reality import filesystem_digest
 
@@ -61,6 +62,11 @@ class ContextEngine:
         objective: str,
         workspace: str | Path,
         revision: str | None = None,
+        acceptance_criteria: tuple[str, ...] = (),
+        current_reconciliation: dict[str, Any] | None = None,
+        constraints: tuple[str, ...] = (),
+        allowed_capabilities: tuple[str, ...] = (),
+        budget: dict[str, Any] | None = None,
         limit: int = 12,
         max_bytes: int = 64 * 1024,
     ) -> ContextBundle:
@@ -95,9 +101,14 @@ class ContextEngine:
         items.append(objective_item)
         used = objective_size
 
+        relevant_files: list[str] = []
+        relevant_symbols: set[str] = set()
+        dependencies: set[str] = set()
+        relevant_history: list[str] = []
         for hit in hits:
             if hit.path.startswith("@history:"):
                 content = hit.path[len("@history:"):]
+                relevant_history.append(content)
                 item = ContextItem(
                     item_id=stable_digest((actual_revision, hit.path)),
                     source_kind=SourceKind.HISTORY,
@@ -122,6 +133,9 @@ class ContextEngine:
                 else:
                     source_kind = SourceKind.FILE
                     trust = TrustClass.REPOSITORY_CONTENT
+                relevant_files.append(indexed.path)
+                relevant_symbols.update(indexed.symbols)
+                dependencies.update(indexed.dependencies)
                 item = ContextItem(
                     item_id=stable_digest((actual_revision, indexed.path, indexed.digest)),
                     source_kind=source_kind,
@@ -145,30 +159,31 @@ class ContextEngine:
             used += encoded_size
 
         generated = datetime.now(timezone.utc)
-        bundle_id = stable_digest((run_id, workspace_id, repository_id, actual_revision, current_fs, index.digest, objective, tuple(i.item_id for i in items)))
+        acceptance = tuple(acceptance_criteria)
+        reconciliation = dict(current_reconciliation or {})
+        bundle_budget = dict(budget or {})
+        recent_changes = index.history[:8]
+        summary = f"{len(index.files)} indexed files; {len(relevant_files)} retrieved files; revision {actual_revision}"
+        bundle_id = stable_digest((run_id, workspace_id, repository_id, actual_revision, current_fs, index.digest, objective, acceptance, reconciliation, constraints, allowed_capabilities, bundle_budget, tuple(i.item_id for i in items)))
         digest = stable_digest({
-            "bundle_id": bundle_id,
-            "run_id": run_id,
-            "workspace_id": workspace_id,
-            "repository_id": repository_id,
-            "revision": actual_revision,
-            "filesystem_digest": current_fs,
-            "index_digest": index.digest,
-            "query": objective,
-            "items": tuple(items),
+            "bundle_id": bundle_id, "run_id": run_id, "workspace_id": workspace_id, "repository_id": repository_id,
+            "revision": actual_revision, "filesystem_digest": current_fs, "index_digest": index.digest,
+            "query": objective, "items": tuple(items), "acceptance_criteria": acceptance,
+            "repository_summary": summary, "relevant_files": tuple(relevant_files),
+            "relevant_symbols": tuple(sorted(relevant_symbols)), "dependencies": tuple(sorted(dependencies)),
+            "recent_changes": recent_changes, "relevant_history": tuple(relevant_history),
+            "current_reconciliation": reconciliation, "constraints": tuple(constraints),
+            "allowed_capabilities": tuple(allowed_capabilities), "budget": bundle_budget,
         })
         return ContextBundle(
-            bundle_id=bundle_id,
-            run_id=run_id,
-            workspace_id=workspace_id,
-            repository_id=repository_id,
-            revision=actual_revision,
-            filesystem_digest=current_fs,
-            index_digest=index.digest,
-            query=objective,
-            generated_at=generated,
-            items=tuple(items),
-            digest=digest,
+            bundle_id=bundle_id, run_id=run_id, workspace_id=workspace_id, repository_id=repository_id,
+            revision=actual_revision, filesystem_digest=current_fs, index_digest=index.digest,
+            query=objective, generated_at=generated, items=tuple(items), digest=digest,
+            acceptance_criteria=acceptance, repository_summary=summary,
+            relevant_files=tuple(relevant_files), relevant_symbols=tuple(sorted(relevant_symbols)),
+            dependencies=tuple(sorted(dependencies)), recent_changes=recent_changes,
+            relevant_history=tuple(relevant_history), current_reconciliation=reconciliation,
+            constraints=tuple(constraints), allowed_capabilities=tuple(allowed_capabilities), budget=bundle_budget,
         )
 
 
