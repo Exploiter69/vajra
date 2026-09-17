@@ -6,7 +6,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 10 — Real Autonomous Engineering Loop: COMPLETE / CLOSED.**
+**Phase 11 — Long-Run Durability + Chaos: COMPLETE / CLOSED.**
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming.
 
@@ -41,6 +41,26 @@ repeat / recover / human / complete
 **Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a Phase 10 dependency.
 
 Validation is closed with 6 Phase 10 tests, 578 portable full-suite tests, compile validation and diff validation. Four physical gVisor integration tests are excluded from hosted CI because Gate D already has separate physical validation.
+
+## Phase 11 implementation
+
+Phase 11 validates unattended durability under failure rather than only the
+happy path:
+
+- deterministic kill schedules for controller, worker, model, process, network, sandbox and machine simulation;
+- real process-kill/restart recovery coverage;
+- state-divergence detection without replacing Phase 7 reconciliation;
+- hard retry-storm termination;
+- lease-expiry/fencing race coverage;
+- explicit 1h / 12h / 3d / 7d / 30d long-run profiles;
+- soak metrics for memory, disk, events, context, worker leaks, stale leases,
+  retries, verification/provider failures and clock anomalies.
+
+See `src/vajra/durability/chaos.py`,
+`tests/durability/test_phase11_chaos.py`,
+`docs/PHASE_11_IMPLEMENTATION.md`,
+`docs/PHASE_11_GATE_RESULT.md`, and
+`.github/workflows/phase11-validation.yml`.
 
 ## Phase 10 implementation
 
