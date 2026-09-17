@@ -46,11 +46,13 @@ class RoutingRecovery:
     ) -> RecoveryPlan:
         """Choose the next bounded routing recovery action.
 
-        ``current_model`` is explicit recovery context. The tried-model set
-        remains the authoritative exclusion input because durable Runs can
-        accumulate failures across multiple attempts.
+        ``current_model`` supplies the identity of the model that just failed.
+        The durable ``tried_models`` set remains authoritative when populated;
+        current-model context is used only when that durable set is empty.
         """
-        del current_model
+        effective_tried_models = tried_models
+        if not effective_tried_models and current_model is not None:
+            effective_tried_models = frozenset({current_model})
 
         if same_model_failures < self._max_same_model_retries:
             return RecoveryPlan(
@@ -84,7 +86,7 @@ class RoutingRecovery:
         except RoutingError:
             worker_switch = None
         if worker_switch is not None and worker_switch.worker_id not in tried_workers:
-            if worker_switch.model.canonical in tried_models:
+            if worker_switch.model.canonical in effective_tried_models:
                 return RecoveryPlan(
                     RecoveryAction.DIFFERENT_WORKER,
                     attempt_index + 1,
@@ -102,11 +104,11 @@ class RoutingRecovery:
             model_switch = self._router.select_alternative(
                 request_id,
                 profile,
-                excluded_models=tried_models,
+                excluded_models=effective_tried_models,
             )
         except RoutingError:
             model_switch = None
-        if model_switch is not None and model_switch.model.canonical not in tried_models:
+        if model_switch is not None and model_switch.model.canonical not in effective_tried_models:
             return RecoveryPlan(
                 RecoveryAction.DIFFERENT_MODEL,
                 attempt_index + 1,
