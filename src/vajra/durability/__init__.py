@@ -10,7 +10,7 @@ from .chaos import (
     SoakMetrics,
     SoakSample,
 )
-from .kill_harness import KillHarness, KillResult
+from .kill_harness import KillHarness, KillResult, recovery_action_for
 from .soak import SoakConfig, SoakCounters, SoakRunner
 
 __all__ = [
@@ -29,4 +29,5 @@ __all__ = [
     "SoakMetrics",
     "SoakRunner",
     "SoakSample",
+    "recovery_action_for",
 ]
