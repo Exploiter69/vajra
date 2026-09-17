@@ -3,23 +3,9 @@ from __future__ import annotations
 import unittest
 
 from vajra.routing import (
-    BudgetEnvelope,
-    CallableModelAdapter,
-    CapabilityRouter,
-    Complexity,
-    ModelGateway,
-    ModelGatewayError,
-    ModelIdentity,
-    ModelRegistry,
-    ModelRequest,
-    ModelResult,
-    ModelUsage,
-    RecoveryAction,
-    RoutingRecovery,
-    TaskProfile,
-    WorkerCapabilities,
-    WorkerDescriptor,
-    WorkerRegistry,
+    BudgetEnvelope, CallableModelAdapter, CapabilityRouter, Complexity, ModelGateway,
+    ModelGatewayError, ModelIdentity, ModelRegistry, ModelRequest, ModelResult, ModelUsage,
+    RecoveryAction, RoutingRecovery, TaskProfile, WorkerCapabilities, WorkerDescriptor, WorkerRegistry,
 )
 
 
@@ -28,24 +14,7 @@ def identity(provider: str, model: str, version: str) -> ModelIdentity:
 
 
 def worker(worker_id: str, model: str, tasks: frozenset[str], *, reliability: float = 1.0, cost: int = 0) -> WorkerDescriptor:
-    return WorkerDescriptor(
-        worker_id,
-        WorkerCapabilities(
-            accelerator="test" if worker_id != "cpu" else None,
-            vram_gib=16 if worker_id != "cpu" else 0,
-            system_ram_gib=32,
-            model=model,
-            model_version="1",
-            context_limit=32768,
-            supported_tasks=tasks,
-            sandbox_type="isolated",
-            network_policy="none",
-        ),
-        reliability=reliability,
-        latency_ms=10,
-        cost_units=cost,
-        metadata={"provider": "local", "adapter": "test"},
-    )
+    return WorkerDescriptor(worker_id, WorkerCapabilities(accelerator="test" if worker_id != "cpu" else None, vram_gib=16 if worker_id != "cpu" else 0, system_ram_gib=32, model=model, model_version="1", context_limit=32768, supported_tasks=tasks, sandbox_type="isolated", network_policy="none"), reliability=reliability, latency_ms=10, cost_units=cost, metadata={"provider": "local", "adapter": "test"})
 
 
 class Phase12RoutingTests(unittest.TestCase):
@@ -116,32 +85,32 @@ class Phase12RoutingTests(unittest.TestCase):
     def test_different_model_recovery(self) -> None:
         registry = WorkerRegistry((worker("a", "m1", frozenset({"x"})), worker("b", "m2", frozenset({"x"}))))
         recovery = RoutingRecovery(CapabilityRouter(registry))
-        plan = recovery.next(TaskProfile("x", Complexity.COMPLEX), request_id="r", attempt_index=1, same_model_failures=1, tried_models=frozenset({"local:m1@1"}), tried_workers=frozenset({"a"}), strategy_changed=True)
+        plan = recovery.next(TaskProfile("x", Complexity.COMPLEX), request_id="r", current_model="local:m1@1", attempt_index=1, same_model_failures=1, tried_models=frozenset({"local:m1@1"}), tried_workers=frozenset({"a"}), strategy_changed=True)
         self.assertEqual(plan.action, RecoveryAction.DIFFERENT_MODEL)
 
     def test_different_worker_recovery_when_model_is_shared(self) -> None:
         registry = WorkerRegistry((worker("a", "m", frozenset({"x"})), worker("b", "m", frozenset({"x"}))))
         recovery = RoutingRecovery(CapabilityRouter(registry))
-        plan = recovery.next(TaskProfile("x", Complexity.SIMPLE), request_id="r", attempt_index=1, same_model_failures=1, tried_workers=frozenset({"a"}), strategy_changed=True)
+        plan = recovery.next(TaskProfile("x", Complexity.SIMPLE), request_id="r", current_model="local:m@1", attempt_index=1, same_model_failures=1, tried_workers=frozenset({"a"}), strategy_changed=True)
         self.assertEqual(plan.action, RecoveryAction.DIFFERENT_WORKER)
 
     def test_same_model_retry_is_bounded(self) -> None:
         router = CapabilityRouter(WorkerRegistry((worker("a", "m", frozenset({"x"})),)))
         recovery = RoutingRecovery(router, max_same_model_retries=1)
         profile = TaskProfile("x", Complexity.SIMPLE)
-        self.assertEqual(recovery.next(profile, request_id="r", attempt_index=0, same_model_failures=0).action, RecoveryAction.SAME_MODEL_RETRY)
-        self.assertEqual(recovery.next(profile, request_id="r", attempt_index=1, same_model_failures=1).action, RecoveryAction.DIFFERENT_STRATEGY)
+        self.assertEqual(recovery.next(profile, request_id="r", current_model="local:m@1", attempt_index=0, same_model_failures=0).action, RecoveryAction.SAME_MODEL_RETRY)
+        self.assertEqual(recovery.next(profile, request_id="r", current_model="local:m@1", attempt_index=1, same_model_failures=1).action, RecoveryAction.DIFFERENT_STRATEGY)
 
     def test_strategy_change_precedes_resource_switch(self) -> None:
         router = CapabilityRouter(WorkerRegistry((worker("a", "m", frozenset({"x"})),)))
-        plan = RoutingRecovery(router).next(TaskProfile("x", Complexity.SIMPLE), request_id="r", attempt_index=1, same_model_failures=1)
+        plan = RoutingRecovery(router).next(TaskProfile("x", Complexity.SIMPLE), request_id="r", current_model="local:m@1", attempt_index=1, same_model_failures=1)
         self.assertEqual(plan.action, RecoveryAction.DIFFERENT_STRATEGY)
         self.assertTrue(plan.profile.strategy_id.endswith(":alternate"))
 
     def test_exhausted_routing_escalates_to_human(self) -> None:
         router = CapabilityRouter(WorkerRegistry((worker("a", "m", frozenset({"x"})),)))
         profile = TaskProfile("x", Complexity.SIMPLE)
-        plan = RoutingRecovery(router).next(profile, request_id="r", attempt_index=2, same_model_failures=1, tried_models=frozenset({"local:m@1"}), tried_workers=frozenset({"a"}), strategy_changed=True)
+        plan = RoutingRecovery(router).next(profile, request_id="r", current_model="local:m@1", attempt_index=2, same_model_failures=1, tried_models=frozenset({"local:m@1"}), tried_workers=frozenset({"a"}), strategy_changed=True)
         self.assertEqual(plan.action, RecoveryAction.HUMAN)
 
     def test_budget_envelope_rejects_negative_values(self) -> None:
