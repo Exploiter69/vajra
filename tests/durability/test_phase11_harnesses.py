@@ -246,7 +246,7 @@ def test_reality_observer_catches_three_source_divergence(tmp_path: Path):
     assert report.git_status_digest != contract.git_status_digest
     assert report.filesystem_digest == filesystem_before_observe
     assert report.divergence_class.value == "RECOVERABLE"
-    assert "Durable VAJRA state differs" in report.observed_external_state["reasons"]
+    assert report.observed_external_state["reasons"][0].startswith("Durable VAJRA state differs")
 
 
 def test_local_durable_runtime_retry_storm_terminates_at_runtime_boundary(tmp_path: Path):
@@ -297,6 +297,6 @@ def test_autonomous_loop_retry_storm_is_bounded_at_control_plane(tmp_path: Path)
 
     assert result.stopped is True
     assert result.completed is False
-    assert result.cycle == 12
+    assert result.cycles == 12
     assert manager.get_run("phase10-run").state.value != "COMPLETE"
     assert any(event.event_type == "AUTONOMY_DECIDE_NEXT_STEP" for event in manager.events("phase10-run"))
