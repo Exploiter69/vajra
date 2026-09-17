@@ -1,12 +1,10 @@
 # VAJRA — Current State
 
 **Project:** VAJRA  
-**Version:** v0.1.0 baseline  
-**Phase:** Phase 6 — Implementation complete  
-**Implementation status:** Phase 6 complete; post-v0 operationalization pending  
-**Baseline commit:** `fb3cca5`  
-**Baseline tag:** `v0.1.0`  
-**Test suite at freeze:** 419 passed  
+**Version:** v0.1.0 baseline + post-v0 operationalization  
+**Phase:** Phase 11 — Long-Run Durability + Chaos complete  
+**Implementation status:** Phase 11 complete; Phase 12 not started  
+**Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
 ---
@@ -25,25 +23,19 @@ Canonical state belongs to VAJRA, not to models or workers.
 
 ---
 
-## 2. Canonical Specification
+## 2. Canonical Specifications
 
-The canonical v0 technical specification is:
+Primary architecture/specification sources:
 
-`docs/VAJRA_v0_Technical_Specification.txt`
+- `docs/VAJRA_v0_Technical_Specification.txt`
+- `docs/VAJRA_v1_Architecture_and_Roadmap_Specification.md`
+- `docs/PHASE_7_DESIGN_FREEZE.md`
 
-The original PDF is:
-
-`VAJRA v0 Technical Specification.pdf`
-
-The specification remains the architectural authority. It defines the architectural laws, system planes, Engineering Run model, worker protocol, policy boundary, execution boundary, sandbox abstraction, verification semantics, recovery model, budgets, security boundary, topology, v0 scope, and implementation sequence.
-
-The specification was written before implementation and contains historical Phase 5 status text. That historical text is not the current implementation status; this file records the actual repository state.
+The v0 specification remains architectural authority. Historical status text inside the original specification is historical; this file records current repository status.
 
 ---
 
 ## 3. Architectural Laws
-
-The following remain normative:
 
 1. Model Is Not Authority
 2. VAJRA Owns Canonical State
@@ -56,280 +48,301 @@ The following remain normative:
 9. Progress Requires Evidence
 10. Human Is Ultimate Authority
 
-Core boundary:
+The operating boundary is:
 
-    OBJECTIVE
-      |
-      v
-    CONTEXT
-      |
-      v
-    MODEL / REASONING
-      |
-      v
-    INTENT
-      |
-      v
-    POLICY
-      |
-      v
-    EXECUTION BROKER
-      |
-      v
-    SANDBOX / WORKSPACE
-      |
-      v
-    ARTIFACT
-      |
-      v
-    VERIFICATION
-      |
-      v
-    EVIDENCE
-      |
-      v
-    NEXT STEP / RECOVERY / COMPLETION
+```text
+OBJECTIVE
+   ↓
+CONTEXT
+   ↓
+MODEL / REASONING
+   ↓
+INTENT
+   ↓
+POLICY
+   ↓
+EXECUTION BROKER
+   ↓
+SANDBOX / WORKSPACE
+   ↓
+ARTIFACT
+   ↓
+INDEPENDENT VERIFICATION
+   ↓
+EVIDENCE
+   ↓
+PROGRESS / RECOVERY / HUMAN / COMPLETION
+```
 
 The model is inside VAJRA, never above VAJRA.
 
 ---
 
-## 4. Phase 6 Final Status
+## 4. Phase Status
 
-Phase 6 implementation is complete and the v0.1.0 baseline is frozen.
+| Phase | Status | Evidence |
+|---|---|---|
+| Phase 6 — Core implementation | COMPLETE / FROZEN | `fb3cca5`, tag `v0.1.0` |
+| Phase 7 — Safety foundation + autonomous control | COMPLETE / Gate F PASSED | Gate F integration and real-path tests |
+| Phase 8 — Context + workspace | COMPLETE | context/workspace suite and full validation |
+| Phase 9 — Verification + evidence integrity | COMPLETE / Gate PASSED | verification, anti-gaming, integrity and environment tests |
+| Phase 10 — Autonomous engineering loop | COMPLETE / Gate PASSED | end-to-end loop, safety boundaries, portable CI |
+| Phase 11 — Long-run durability + chaos | COMPLETE / Gate PASSED | kill harness, divergence, retry storm, lease chaos, soak runner and portable CI |
+| Phase 12 — Model + worker routing | NOT STARTED | blocked by roadmap ordering until Phase 11 is complete |
 
-Final integration gate:
+---
+
+## 5. Phase 6 Frozen Baseline
+
+Phase 6 established the runtime foundation and was frozen at:
 
 - commit: `fb3cca5`
-- working tree: clean
-- `git diff --check`: clean
-- full automated suite: `419 passed`
 - tag: `v0.1.0`
+- operating cost: ₹0.00
+- baseline working tree: clean
 
-The frozen baseline contains the implemented runtime foundation and safety boundaries. It does not yet constitute the complete autonomous engineering loop.
+The baseline established the durable distinction:
 
----
+```text
+Run      = durable
+Step     = durable
+Attempt  = disposable
+Worker   = disposable
+Model    = disposable
+```
 
-## 5. Gate Status
-
-| Gate | Property | Result | Current decision |
-|---|---|---|---|
-| A | Durable Recovery | PASS | Accepted |
-| B | Needle Benchmark | REJECT | Needle dropped as mandatory v0 dependency |
-| C | Oracle → Kaggle Worker Lifecycle | PASS WITH INFRASTRUCTURE LIMITATION | Accepted without claiming Oracle-hosted deployment |
-| D | Sandbox Isolation | PASS | gVisor selected as v0 sandbox backend |
-| E | ASTRA Safety Extraction | PASS WITH LIMITATIONS | Proven behavior may be adapted; ASTRA is not a dependency |
-
-### Gate C
-
-Deterministic lifecycle evidence and the physical worker path established:
-
-- canonical Run state remains under VAJRA control
-- Worker Jobs correlate to the correct Step/Attempt
-- lease/fencing protects result acceptance
-- worker disappearance transitions into recovery
-- replacement worker selection is supported
-- Oracle-controlled retry creates a new Attempt with new lease/fencing
-- stale workers cannot mutate canonical Run state
-- Laptop → Cloudflare tunnel → Kaggle worker → Qwen 2.5 Coder 32B → WorkerResult was physically exercised
-
-An Oracle VM was not available. Therefore an Oracle-hosted deployment itself is not claimed as physically proven.
-
-### Gate D
-
-gVisor through Docker/runsc was selected as the v0 sandbox backend. Validation covered filesystem/path traversal, symlink escape, process isolation, unauthorized network access, credential-location isolation, resource limits, and authorized execution. Firecracker was not selected because a suitable guest kernel/rootfs and complete guest isolation proof were unavailable in the test environment.
-
-The SandboxBackend abstraction remains mandatory.
+The baseline remains immutable. Later work proceeds on `main`.
 
 ---
 
-## 6. Implemented v0.1.0 Capabilities
+## 6. Physical Gates
 
-### Domain and lifecycle
+### Gate A — Durable Recovery
 
-- Core domain contracts
-- Engineering Run lifecycle
-- durable Steps
-- disposable Attempts
-- checkpoints
-- final dispositions
-- bounded state transitions
+PASS. Run/process recovery and idempotency behavior were physically validated.
 
-### Durable runtime
+### Gate B — Local model
 
-- DurableRuntime abstraction
-- restart-capable append-only reference runtime
-- replay
-- durable timers
-- retry/recovery semantics
-- execution lifecycle persistence
+Evaluated as an infrastructure capability rather than a VAJRA authority dependency.
 
-The local durable runtime is a development/reference implementation, not the final distributed production runtime.
+### Gate C — Remote worker
 
-### Worker protocol
+PASS WITH INFRASTRUCTURE LIMITATION. The physical path was exercised through HTTP transport to a remote worker using Qwen 2.5 Coder 32B. Oracle-hosted deployment was not claimed because the zero-cost/no-credit-card constraint prevented that infrastructure.
 
-- WorkerJob / WorkerResult contracts
-- worker dispatch boundary
-- lease management
-- fencing
-- canonical result acceptance
-- worker disappearance detection
-- Oracle-controlled retry
-- worker-change recovery
-- correlation identity preservation
+### Gate D — Sandbox
 
-### Policy and execution
+PASS. gVisor through Docker/runsc was physically validated and selected as the v0 sandbox backend. Physical Firecracker proof was not claimed because suitable guest assets and complete guest isolation proof were unavailable.
 
-- deterministic Policy Engine
-- explicit ALLOW / DENY / MODIFY / HUMAN_REQUIRED decisions
-- Execution Broker as execution authority
-- bounded workspace file operations
-- controlled process execution
-- read-only Git inspection backend
-- sandboxed execution boundary
+### Gate E — ASTRA extraction
 
-### Verification and evidence
+PASS WITH LIMITATIONS. Only proven useful behaviors were carried into VAJRA; ASTRA is not a VAJRA runtime dependency.
 
-- independent command verification
-- structured verification results
-- acceptance evaluation
-- content-addressed verification evidence
+### Gate F — Autonomous control safety
 
-### Failure and recovery
-
-- failure classification
-- recovery policy
-- recovery coordination
-- retry / strategy / model / worker / checkpoint / human / abort actions
-- no-progress detection
-- budgets
-- checkpoint persistence
-- reconciliation
-- human escalation
-
-### CLI
-
-The v0 CLI provides human control for Run creation, listing, status, events, transitions, abort, and snapshots. The CLI control surface is implemented; persistent production CLI storage still depends on the production canonical state backend.
-
-### Sandbox and physical infrastructure
-
-- RestrictedLocal reference sandbox
-- gVisor Docker/runsc backend
-- resource-limit translation
-- Gate D security harness
-- Kaggle worker integration path
-- HTTP worker transport
+PASS. Phase 7 validated frozen acceptance, fresh reconciliation, ownership, idempotency, controller authority, hard budgets, no-progress behavior, repeated-failure protection and chaos scenarios.
 
 ---
 
-## 7. Known v0.1.0 Limitations
+## 7. Phase 8 — Context + Workspace
 
-The frozen baseline is intentionally a runtime foundation rather than a finished autonomous engineering product.
+Phase 8 established:
 
-The following major operational layers are not yet fully wired into one durable end-to-end loop:
+- Git worktree lifecycle primitives
+- deterministic context construction/retrieval
+- trust tagging
+- context freshness
+- workspace/reality boundaries
+- deterministic digests
 
-1. ContextBundle contract and deterministic context construction
-2. Model Gateway / Model Adapter
-3. model reasoning → structured engineering intents
-4. operational Git worktree lifecycle
-5. durable Run controller/orchestration of the full engineering loop
-6. acceptance-criteria → executable verification conditions
-7. persistent production state/event backend
-8. production deployment of the always-on control plane
-
-These are the primary post-v0 implementation targets.
+Validation reached the full repository suite with clean compile and diff checks.
 
 ---
 
-## 8. Next Engineering Direction — Post-v0 Operationalization
+## 8. Phase 9 — Independent Verification
 
-Do not create an invented "Phase 7". The v0 specification defines the Phase 6 implementation sequence; the work after the frozen v0.1.0 baseline is post-v0 operationalization.
+Phase 9 established:
 
-The target autonomous loop is:
+- acceptance criteria compiler
+- independent verifier
+- test-integrity / anti-gaming controls
+- pristine verification environment
+- immutable/content-addressed verification evidence
+- adversarial verification coverage
 
-    Engineering Objective
-          |
-          v
-    Context Builder
-          |
-          v
-    Model Gateway / Reasoning
-          |
-          v
-    Structured Intent(s)
-          |
-          v
-    Policy Engine
-          |
-          v
-    Execution Broker
-          |
-          v
-    Sandbox / Workspace
-          |
-          v
-    Artifact / Change
-          |
-          v
-    Independent Verification
-          |
-          v
-    Evidence
-          |
-          v
-    Run Controller
-          |
-          +------> next reasoning cycle
-          |
-          +------> recovery
-          |
-          +------> human escalation
-          |
-          +------> completion
-
-The implementation must preserve all ten architectural laws while making this loop durable, bounded, evidence-driven, and recoverable.
+Worker/model output is not treated as proof.
 
 ---
 
-## 9. Research Boundary Before Further Implementation
+## 9. Phase 10 — Autonomous Engineering Loop
 
-The v0.1.0 baseline is frozen while the autonomous-loop design is reviewed.
+Phase 10 wires the earlier primitives into the first bounded objective-to-evidence controller:
 
-Independent research should focus on:
+```text
+OBJECTIVE
+   ↓
+ORIENT
+   ↓
+CONTEXT
+   ↓
+PLAN
+   ↓
+INTENT
+   ↓
+POLICY
+   ↓
+EXECUTE
+   ↓
+OBSERVE
+   ↓
+VERIFY
+   ↓
+MEASURE PROGRESS
+   ↓
+DECIDE NEXT STEP
+   ↓
+repeat / recover / human / complete
+```
 
-- durable autonomous engineering loops
-- context engineering and minimal task-specific ContextBundles
-- model selection and routing under the ₹0.00 constraint
-- bounded autonomy and termination
-- prevention of repeated patches, oscillation, retry storms, context drift, and false completion
-- end-to-end evidence and verification
-- future v1 capabilities without prematurely importing them into v0
+The loop enforces:
 
-Research must be evaluated against the VAJRA specification, current implementation, and architectural laws before code is changed.
+- fresh context before reasoning
+- context-bound structured plans
+- proposal-only reasoning
+- durable Run/Step/Attempt identities
+- policy authorization before execution
+- broker-only execution
+- lease/result fencing
+- independent verification
+- durable evidence recording
+- deterministic progress measurement
+- bounded no-progress/retry behavior
+- recovery-driven replanning
+- explicit human escalation
+- hard cycle/resource termination
+- evidence-bound promotion/completion
 
 ---
 
-## 10. Explicitly Rejected / Deferred
+## 10. Phase 11 — Long-Run Durability + Chaos
 
-The following remain outside the frozen v0 baseline unless explicitly justified by the specification or a later design decision:
+**Status: COMPLETE / CLOSED**
 
-- Needle as mandatory local specialist
-- ASTRA legacy core
-- Telegram as autonomous control plane
-- vector database
+Phase 11 follows the roadmap order: chaos and long-run reliability are validated before model/worker routing.
+
+### 11A — Kill testing
+
+`ChaosPlan` and `FaultInjector` provide seeded, reproducible fault schedules covering:
+
+- controller
+- worker
+- model
+- process
+- network
+- sandbox
+- machine simulation
+
+`KillHarness` adds a real disposable process boundary. Each modeled failure domain durably records a STARTED execution, receives `SIGKILL`, and is then reopened by a fresh runtime instance to verify recovery discovery.
+
+The harness validates the shared VAJRA durability boundary. It does not falsely claim that every external infrastructure domain was physically destroyed on the host.
+
+### 11B — State divergence
+
+Reality changes are detected through deterministic digests while the existing Phase 7 `RealityObserver` remains the canonical reconciliation boundary.
+
+### 11C — Retry storms
+
+`RetryStormGuard` bounds repeated identical failures per run/step/failure signature and produces a termination decision at the configured threshold.
+
+### 11D — Lease chaos
+
+The real worker result acceptance path verifies that worker A cannot overwrite state after worker B has taken the lease/fencing position.
+
+### 11E — Long-duration runs
+
+The roadmap profiles are explicitly represented:
+
+- 1 hour
+- 12 hours
+- 3 days
+- 7 days
+- 30 days
+
+`SoakRunner` now provides real elapsed-time execution with monotonic timing, configurable sampling, Linux RSS measurement, workspace disk measurement, and runtime counters for all roadmap signals:
+
+- memory growth
+- disk growth
+- event growth
+- context growth
+- worker leaks
+- stale leases
+- retry counts
+- verification failures
+- provider failures
+- clock anomalies
+
+Accelerated tests validate runner mechanics only. They are never represented as equivalent to real 1h/12h/3d/7d/30d elapsed-time evidence.
+
+### Phase 11 validation
+
+The dedicated suite covers the kill harness and soak runner in addition to the earlier Phase 11 safety tests. Hosted CI runs the dedicated suite, portable full suite, compile validation and diff validation. gVisor integration remains environment-specific and is not silently converted into hosted-CI proof.
+
+---
+
+## 11. Current Limitations
+
+The following are explicit infrastructure/evidence boundaries, not hidden requirements:
+
+1. Oracle-hosted infrastructure remains unproven because the project is constrained to ₹0.00/no paid infrastructure.
+2. Physical gVisor proof is environment-specific and is not reproduced by hosted CI.
+3. Real multi-day soak campaigns require an operator to leave the runner executing for the selected elapsed duration. Accelerated CI cannot prove elapsed-time behavior.
+4. The local durable runtime remains a development/reference implementation, not the final distributed production durability backend.
+5. Phase 12 model/worker routing has not started.
+
+No paid service is required to continue development.
+
+---
+
+## 12. Explicitly Deferred
+
+Until a later roadmap phase or explicit design decision:
+
 - distributed worker pool
 - multiple concurrent Runs
 - Kubernetes
 - automatic model fine-tuning
 - complex multi-agent collaboration
+- vector database
+- Telegram as autonomous control plane
+- Needle as mandatory v0 dependency
+- ASTRA legacy core as a runtime dependency
 - premature v1 infrastructure
 
 ---
 
-## 11. Frozen Baseline Rule
+## 13. Next Phase Boundary
 
-`v0.1.0` at commit `fb3cca5` is the immutable Phase 6 completion baseline.
+Phase 12 may now begin because Phase 11 is complete.
+
+The next roadmap area is **MODEL + WORKER ROUTING**, not a replacement of the existing authority model. Routing must preserve the invariant:
+
+```text
+Model proposes
+→ VAJRA decides
+→ Policy authorizes
+→ Broker executes
+→ Verifier proves
+→ Evidence records
+→ Controller continues safely
+```
+
+No routing layer may become an authority bypass.
+
+---
+
+## 14. Frozen Baseline Rule
+
+`v0.1.0` at commit `fb3cca5` is immutable.
 
 Do not delete, rewrite, or retag `v0.1.0`.
 
-Future work proceeds from `main` as post-v0 operationalization while preserving the v0 specification and architectural laws.
+All post-v0 work proceeds from `main` while preserving the canonical specifications and architectural laws.
