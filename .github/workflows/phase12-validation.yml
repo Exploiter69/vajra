@@ -1,0 +1,35 @@
+name: Phase 12 model and worker routing validation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  phase12:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test tooling
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Phase 12 routing tests
+        run: pytest -q tests/routing
+
+      - name: Full portable suite
+        run: pytest -q -k 'not gvisor_integration'
+
+      - name: Compile
+        run: python -m compileall -q src tests
+
+      - name: Diff check
+        run: git diff --check
