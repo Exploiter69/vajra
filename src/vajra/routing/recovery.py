@@ -52,12 +52,23 @@ class RoutingRecovery:
         if not strategy_changed:
             alternate = TaskProfile(profile.task, profile.complexity, profile.required_capabilities, profile.preferred_model, profile.strategy_id + ":alternate", profile.max_cost_units)
             return RecoveryPlan(RecoveryAction.DIFFERENT_STRATEGY, attempt_index + 1, "change reasoning strategy before changing resources", alternate)
+
+        # Prefer a fresh worker for the already-tried model before introducing
+        # a second model. This preserves the roadmap's separate worker-loss
+        # recovery path when model capacity itself is still viable.
         try:
-            decision = self._router.select_alternative(request_id, profile, excluded_workers=tried_workers, excluded_models=tried_models)
+            worker_switch = self._router.select_alternative(request_id, profile, excluded_workers=tried_workers)
         except RoutingError:
-            return RecoveryPlan(RecoveryAction.HUMAN, attempt_index + 1, "no eligible worker remains", profile)
-        if decision.model.canonical not in tried_models:
+            worker_switch = None
+        if worker_switch is not None and worker_switch.worker_id not in tried_workers and worker_switch.model.canonical in tried_models:
+            return RecoveryPlan(RecoveryAction.DIFFERENT_WORKER, attempt_index + 1, "reuse a viable model on a fresh eligible worker", profile)
+
+        try:
+            model_switch = self._router.select_alternative(request_id, profile, excluded_models=tried_models)
+        except RoutingError:
+            model_switch = None
+        if model_switch is not None and model_switch.model.canonical not in tried_models:
             return RecoveryPlan(RecoveryAction.DIFFERENT_MODEL, attempt_index + 1, "select an eligible model not previously tried", profile)
-        if decision.worker_id not in tried_workers:
+        if worker_switch is not None and worker_switch.worker_id not in tried_workers:
             return RecoveryPlan(RecoveryAction.DIFFERENT_WORKER, attempt_index + 1, "select an eligible worker not previously tried", profile)
         return RecoveryPlan(RecoveryAction.HUMAN, attempt_index + 1, "bounded routing alternatives are exhausted", profile)
