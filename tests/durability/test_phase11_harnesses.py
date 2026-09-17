@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
-from vajra.control.reality import RealityObserver, filesystem_digest
+from vajra.control.reality import RealityObserver, filesystem_digest, stable_digest
 from vajra.durability import (
     ChaosTarget,
     KillHarness,
@@ -16,6 +17,8 @@ from vajra.durability import (
     recovery_action_for,
 )
 from vajra.domain import EngineeringRun
+from vajra.execution.broker import ExecutionBroker
+from vajra.execution.contracts import ExecutionResult, ExecutionStatus
 from vajra.runtime.local_durable_runtime import LocalDurableRuntime
 
 
@@ -125,6 +128,20 @@ def _run(*args: str, cwd: Path) -> str:
     return subprocess.check_output(("git", *args), cwd=cwd, text=True).strip()
 
 
+def _make_reality_run(revision: str, objective: str = "detect reality divergence") -> EngineeringRun:
+    return EngineeringRun(
+        run_id="phase11-reality",
+        objective=objective,
+        repository_id="repo",
+        base_revision=revision,
+        acceptance_criteria=("tracked.txt remains present",),
+        policy_id="policy",
+        policy_version="1",
+        budget_id="budget",
+        created_by="test",
+    )
+
+
 def test_reality_observer_detects_actual_git_and_filesystem_divergence(tmp_path: Path):
     workspace = tmp_path / "repo"
     workspace.mkdir()
@@ -150,17 +167,7 @@ def test_reality_observer_detects_actual_git_and_filesystem_divergence(tmp_path:
     base_digest = filesystem_digest(workspace)
     status_digest = hashlib.sha256(status.encode("utf-8")).hexdigest()
 
-    run = EngineeringRun(
-        run_id="phase11-reality",
-        objective="detect reality divergence",
-        repository_id="repo",
-        base_revision=revision,
-        acceptance_criteria=("tracked.txt remains present",),
-        policy_id="policy",
-        policy_version="1",
-        budget_id="budget",
-        created_by="test",
-    )
+    run = _make_reality_run(revision)
     contract = SimpleNamespace(
         workspace_id="workspace-1",
         base_revision=revision,
@@ -196,6 +203,52 @@ def test_reality_observer_detects_actual_git_and_filesystem_divergence(tmp_path:
     assert divergent.divergence_class.value == "RECOVERABLE"
 
 
+def test_reality_observer_catches_three_source_divergence(tmp_path: Path):
+    workspace = tmp_path / "repo"
+    workspace.mkdir()
+    (workspace / "tracked.txt").write_text("A\n", encoding="utf-8")
+    subprocess.run(("git", "init", "-q"), cwd=workspace, check=True)
+    subprocess.run(("git", "add", "tracked.txt"), cwd=workspace, check=True)
+    subprocess.run(("git", "-c", "user.name=VAJRA", "-c", "user.email=vajra@example.invalid", "commit", "-qm", "base"), cwd=workspace, check=True)
+    base_revision = _run("rev-parse", "HEAD", cwd=workspace)
+    clean_status = _run("status", "--porcelain", cwd=workspace)
+    contract = SimpleNamespace(
+        workspace_id="workspace-three-source",
+        base_revision=base_revision,
+        path=str(workspace),
+        git_status_digest=hashlib.sha256(clean_status.encode("utf-8")).hexdigest(),
+    )
+    durable_checkpoint = _make_reality_run(base_revision)
+    current_run = deepcopy(durable_checkpoint)
+    current_run.objective = "VAJRA says X-but-state-is-now-Y"
+
+    (workspace / "tracked.txt").write_text("B\n", encoding="utf-8")
+    subprocess.run(("git", "add", "tracked.txt"), cwd=workspace, check=True)
+    subprocess.run(("git", "-c", "user.name=VAJRA", "-c", "user.email=vajra@example.invalid", "commit", "-qm", "git says Y"), cwd=workspace, check=True)
+    (workspace / "tracked.txt").write_text("C\n", encoding="utf-8")
+    filesystem_before_observe = filesystem_digest(workspace)
+
+    git_revision = _run("rev-parse", "HEAD", cwd=workspace)
+    git_status = _run("status", "--porcelain", cwd=workspace)
+    report = RealityObserver().observe(
+        run=current_run,
+        worktree=contract,
+        git_revision=git_revision,
+        git_status=git_status,
+        active_lease_state="VALID",
+        verification_state="PASS",
+        budget_state="AVAILABLE",
+        expected_durable_state_digest=stable_digest(durable_checkpoint),
+    )
+
+    assert stable_digest(current_run) != stable_digest(durable_checkpoint)
+    assert git_revision != base_revision
+    assert report.git_status_digest != contract.git_status_digest
+    assert report.filesystem_digest == filesystem_before_observe
+    assert report.divergence_class.value == "RECOVERABLE"
+    assert "Durable VAJRA state differs" in report.observed_external_state["reasons"]
+
+
 def test_local_durable_runtime_retry_storm_terminates_at_runtime_boundary(tmp_path: Path):
     runtime = LocalDurableRuntime(tmp_path / "retry.jsonl", max_retries=2)
 
@@ -223,3 +276,27 @@ def test_local_durable_runtime_retry_storm_terminates_at_runtime_boundary(tmp_pa
         assert "Retry limit exhausted" in str(exc)
     else:
         raise AssertionError("runtime retry boundary must hard-stop the storm")
+
+
+def test_autonomous_loop_retry_storm_is_bounded_at_control_plane(tmp_path: Path):
+    from tests.autonomy.test_phase10_loop import build_loop
+
+    loop, manager, _workspace = build_loop(tmp_path)
+
+    class AlwaysFailBackend:
+        def execute(self, request):
+            return ExecutionResult(
+                status=ExecutionStatus.REJECTED,
+                operation=request.intent.operation,
+                errors=("persistent deterministic failure",),
+            )
+
+    loop._broker = ExecutionBroker(AlwaysFailBackend())
+    loop._max_cycles = 12
+    result = loop.run("phase10-run")
+
+    assert result.stopped is True
+    assert result.completed is False
+    assert result.cycle == 12
+    assert manager.get_run("phase10-run").state.value != "COMPLETE"
+    assert any(event.event_type == "AUTONOMY_DECIDE_NEXT_STEP" for event in manager.events("phase10-run"))

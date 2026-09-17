@@ -104,7 +104,6 @@ def filesystem_digest(root: str | Path) -> str:
     return stable_digest(entries)
 
 
-
 class RealityObserver:
     """
     Produces a fresh ReconciliationReport from independently observed state.
@@ -127,6 +126,7 @@ class RealityObserver:
         checkpoint_ref: str | None = None,
         observed_external_state: dict[str, Any] | None = None,
         observed_at: datetime | None = None,
+        expected_durable_state_digest: str | None = None,
     ) -> ReconciliationReport:
         workspace = Path(worktree.path).resolve()
 
@@ -139,6 +139,17 @@ class RealityObserver:
         observations: list[
             tuple[int, DivergenceClass, ReconciliationDisposition, str]
         ] = []
+
+        if expected_durable_state_digest is not None and canonical_digest != expected_durable_state_digest:
+            observations.append(
+                (
+                    50,
+                    DivergenceClass.RECOVERABLE,
+                    ReconciliationDisposition.RECOVERABLE,
+                    "WARNING",
+                )
+            )
+            reasons.append("Durable VAJRA state differs from its reconciliation checkpoint")
 
         if git_revision != worktree.base_revision:
             observations.append(
