@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
-from vajra.control.contracts import WorktreeContract
 from vajra.control.reality import RealityObserver, filesystem_digest
 from vajra.durability import (
     ChaosTarget,
@@ -121,6 +122,7 @@ def test_reality_observer_detects_actual_git_and_filesystem_divergence(tmp_path:
     revision = _run("rev-parse", "HEAD", cwd=workspace)
     status = _run("status", "--porcelain", cwd=workspace)
     base_digest = filesystem_digest(workspace)
+    status_digest = hashlib.sha256(status.encode("utf-8")).hexdigest()
 
     run = EngineeringRun(
         run_id="phase11-reality",
@@ -133,14 +135,11 @@ def test_reality_observer_detects_actual_git_and_filesystem_divergence(tmp_path:
         budget_id="budget",
         created_by="test",
     )
-    contract = WorktreeContract(
-        "workspace-1",
-        "phase11-reality",
-        "repo",
-        revision,
-        str(workspace),
-        True,
-        status_digest=__import__("hashlib").sha256(status.encode()).hexdigest(),
+    contract = SimpleNamespace(
+        workspace_id="workspace-1",
+        base_revision=revision,
+        path=str(workspace),
+        git_status_digest=status_digest,
     )
 
     clean = RealityObserver().observe(
@@ -173,10 +172,12 @@ def test_reality_observer_detects_actual_git_and_filesystem_divergence(tmp_path:
 
 def test_local_durable_runtime_retry_storm_terminates_at_runtime_boundary(tmp_path: Path):
     runtime = LocalDurableRuntime(tmp_path / "retry.jsonl", max_retries=2)
-    runtime.execute("storm", lambda: (_ for _ in ()).throw(RuntimeError("same failure"))) if False else None
+
+    def fail() -> None:
+        raise RuntimeError("same failure")
 
     try:
-        runtime.execute("storm", lambda: (_ for _ in ()).throw(RuntimeError("same failure")))
+        runtime.execute("storm", fail)
     except RuntimeError:
         pass
     else:
@@ -184,7 +185,7 @@ def test_local_durable_runtime_retry_storm_terminates_at_runtime_boundary(tmp_pa
 
     for _ in range(2):
         try:
-            runtime.retry("storm", lambda: (_ for _ in ()).throw(RuntimeError("same failure")))
+            runtime.retry("storm", fail)
         except RuntimeError:
             pass
         else:
