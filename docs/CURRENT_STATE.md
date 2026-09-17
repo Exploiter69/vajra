@@ -2,8 +2,8 @@
 
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
-**Phase:** Phase 11 — Long-Run Durability + Chaos complete  
-**Implementation status:** Phase 11 complete; Phase 12 not started  
+**Phase:** Phase 12 — Model + Worker Routing complete  
+**Implementation status:** Phase 12 complete / closed  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -88,7 +88,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 9 — Verification + evidence integrity | COMPLETE / Gate PASSED | verification, anti-gaming, integrity and environment tests |
 | Phase 10 — Autonomous engineering loop | COMPLETE / Gate PASSED | end-to-end loop, safety boundaries, portable CI |
 | Phase 11 — Long-run durability + chaos | COMPLETE / Gate PASSED | kill harness, divergence, retry storm, lease chaos, soak runner and portable CI |
-| Phase 12 — Model + worker routing | NOT STARTED | blocked by roadmap ordering until Phase 11 is complete |
+| Phase 12 — Model + worker routing | COMPLETE / Gate PASSED | gateway, capability routing, switching/recovery, routing evidence, portable CI |
 
 ---
 
@@ -203,23 +203,7 @@ DECIDE NEXT STEP
 repeat / recover / human / complete
 ```
 
-The loop enforces:
-
-- fresh context before reasoning
-- context-bound structured plans
-- proposal-only reasoning
-- durable Run/Step/Attempt identities
-- policy authorization before execution
-- broker-only execution
-- lease/result fencing
-- independent verification
-- durable evidence recording
-- deterministic progress measurement
-- bounded no-progress/retry behavior
-- recovery-driven replanning
-- explicit human escalation
-- hard cycle/resource termination
-- evidence-bound promotion/completion
+The loop enforces fresh context, proposal-only reasoning, policy authorization, broker-only execution, lease/result fencing, independent verification, evidence recording, deterministic progress, bounded recovery, human escalation, and hard termination.
 
 ---
 
@@ -227,86 +211,76 @@ The loop enforces:
 
 **Status: COMPLETE / CLOSED**
 
-Phase 11 follows the roadmap order: chaos and long-run reliability are validated before model/worker routing.
+Phase 11 established deterministic chaos schedules, real disposable-process kill/recovery validation, state-divergence detection, bounded retry-storm handling, lease fencing coverage, and a real elapsed-time soak runner with explicit 1h / 12h / 3d / 7d / 30d profiles.
 
-### 11A — Kill testing
-
-`ChaosPlan` and `FaultInjector` provide seeded, reproducible fault schedules covering:
-
-- controller
-- worker
-- model
-- process
-- network
-- sandbox
-- machine simulation
-
-`KillHarness` adds a real disposable process boundary. Each modeled failure domain durably records a STARTED execution, receives `SIGKILL`, and is then reopened by a fresh runtime instance to verify recovery discovery.
-
-The harness validates the shared VAJRA durability boundary. It does not falsely claim that every external infrastructure domain was physically destroyed on the host.
-
-### 11B — State divergence
-
-Reality changes are detected through deterministic digests while the existing Phase 7 `RealityObserver` remains the canonical reconciliation boundary.
-
-### 11C — Retry storms
-
-`RetryStormGuard` bounds repeated identical failures per run/step/failure signature and produces a termination decision at the configured threshold.
-
-### 11D — Lease chaos
-
-The real worker result acceptance path verifies that worker A cannot overwrite state after worker B has taken the lease/fencing position.
-
-### 11E — Long-duration runs
-
-The roadmap profiles are explicitly represented:
-
-- 1 hour
-- 12 hours
-- 3 days
-- 7 days
-- 30 days
-
-`SoakRunner` now provides real elapsed-time execution with monotonic timing, configurable sampling, Linux RSS measurement, workspace disk measurement, and runtime counters for all roadmap signals:
-
-- memory growth
-- disk growth
-- event growth
-- context growth
-- worker leaks
-- stale leases
-- retry counts
-- verification failures
-- provider failures
-- clock anomalies
-
-Accelerated tests validate runner mechanics only. They are never represented as equivalent to real 1h/12h/3d/7d/30d elapsed-time evidence.
-
-### Phase 11 validation
-
-The dedicated suite covers the kill harness and soak runner in addition to the earlier Phase 11 safety tests. Hosted CI runs the dedicated suite, portable full suite, compile validation and diff validation. gVisor integration remains environment-specific and is not silently converted into hosted-CI proof.
+Accelerated tests validate runner mechanics only; they do not claim real elapsed-time evidence.
 
 ---
 
-## 11. Current Limitations
+## 11. Phase 12 — Model + Worker Routing
 
-The following are explicit infrastructure/evidence boundaries, not hidden requirements:
+**Status: COMPLETE / CLOSED**
+
+Phase 12 implements every roadmap subsection without changing the authority model.
+
+### 12A — Model abstraction
+
+`src/vajra/routing/contracts.py` and `gateway.py` provide:
+
+- stable `ModelGateway` contract;
+- `ModelRequest` with run/step/attempt identity, task, context, tools, output schema, budget, deadline, model and strategy;
+- `ModelResult` with status, structured output, raw output reference, usage, model identity, errors and routing evidence;
+- versioned `ModelIdentity` (provider/model/version/adapter);
+- `ModelUsage` accounting;
+- registry-based, dependency-free adapters.
+
+### 12B — Complexity routing
+
+`CapabilityRouter` supports simple, mechanical, complex and difficult work classification and deterministic worker selection based on task support, required capabilities, model preference, availability and budget. Selection evidence records the complete candidate set and chosen worker/model.
+
+### 12C — Model switching
+
+`RoutingRecovery` implements bounded recovery through same-model retry, strategy change, different model, different worker, and human escalation when alternatives are exhausted.
+
+### 12D — Capability-based workers
+
+`WorkerCapabilities` records accelerator, VRAM, system RAM, model, model version, context limit, supported tasks, sandbox type and network policy. No GPU/vendor name is hard-coded as a routing authority.
+
+### Authority preservation
+
+Routing only selects resources. It does not authorize operations, mutate canonical Run state, replace leases, execute commands, or establish verification evidence. Any routed attempt remains subject to the existing Policy, Execution Broker, lease/fencing, sandbox/workspace, and independent Verification boundaries.
+
+### Phase 12 validation
+
+`tests/routing/test_phase12_routing.py` covers model identity/version/usage, gateway failure behavior, complexity classification, capability fit, deterministic selection, budget enforcement, fail-closed routing, routing evidence, model/worker switching, bounded retries, strategy changes and human escalation. `.github/workflows/phase12-validation.yml` runs the routing suite, portable full suite, compilation and diff checks.
+
+### Explicit boundaries
+
+- Oracle remains optional/unproven under the ₹0.00 constraint.
+- Kaggle remains an ephemeral worker, never canonical state.
+- No paid inference or infrastructure was introduced.
+- No always-on daemon was introduced; that is Phase 13.
+- No Engineering Memory was introduced; that is Phase 14.
+
+---
+
+## 12. Current Limitations
 
 1. Oracle-hosted infrastructure remains unproven because the project is constrained to ₹0.00/no paid infrastructure.
 2. Physical gVisor proof is environment-specific and is not reproduced by hosted CI.
 3. Real multi-day soak campaigns require an operator to leave the runner executing for the selected elapsed duration. Accelerated CI cannot prove elapsed-time behavior.
 4. The local durable runtime remains a development/reference implementation, not the final distributed production durability backend.
-5. Phase 12 model/worker routing has not started.
 
-No paid service is required to continue development.
+These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requirements.
 
 ---
 
-## 12. Explicitly Deferred
+## 13. Explicitly Deferred
 
 Until a later roadmap phase or explicit design decision:
 
-- distributed worker pool
+- always-on control plane / daemon (Phase 13)
+- distributed worker pool beyond the Phase 12 capability abstraction
 - multiple concurrent Runs
 - Kubernetes
 - automatic model fine-tuning
@@ -319,11 +293,11 @@ Until a later roadmap phase or explicit design decision:
 
 ---
 
-## 13. Next Phase Boundary
+## 14. Next Phase Boundary
 
-Phase 12 may now begin because Phase 11 is complete.
+Phase 12 is complete. The next roadmap boundary is **PHASE 13 — ALWAYS-ON CONTROL PLANE**.
 
-The next roadmap area is **MODEL + WORKER ROUTING**, not a replacement of the existing authority model. Routing must preserve the invariant:
+The routing layer remains subordinate to the existing authority chain:
 
 ```text
 Model proposes
@@ -339,7 +313,7 @@ No routing layer may become an authority bypass.
 
 ---
 
-## 14. Frozen Baseline Rule
+## 15. Frozen Baseline Rule
 
 `v0.1.0` at commit `fb3cca5` is immutable.
 

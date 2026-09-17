@@ -6,39 +6,42 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 11 — Long-Run Durability + Chaos: COMPLETE / CLOSED.**
+**Phase 12 — Model + Worker Routing: COMPLETE / CLOSED.**
 
-Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming.
+Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior before routing was enabled.
 
-Phase 10 wired those primitives into the first real objective-to-evidence loop:
+Phase 12 adds model/worker routing without changing the authority boundary:
 
 ```text
-OBJECTIVE
+TASK
    ↓
-ORIENT
+COMPLEXITY
    ↓
-CONTEXT
+CAPABILITY ROUTER
    ↓
-PLAN
+MODEL / WORKER SELECTION
    ↓
-INTENT
+MODEL GATEWAY
    ↓
-POLICY
+MODEL RESULT + ROUTING EVIDENCE
    ↓
-EXECUTE
-   ↓
-OBSERVE
-   ↓
-VERIFY
-   ↓
-MEASURE PROGRESS
-   ↓
-DECIDE NEXT STEP
-   ↓
-repeat / recover / human / complete
+POLICY → BROKER → VERIFICATION
 ```
 
 **Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a project dependency.
+
+## Phase 12 implementation
+
+- `src/vajra/routing/contracts.py` — model identity, request/result, usage, task complexity, routing evidence and budget contracts
+- `src/vajra/routing/gateway.py` — stable model gateway, registry and dependency-free adapter boundary
+- `src/vajra/routing/workers.py` — capability-based worker descriptors and registry
+- `src/vajra/routing/router.py` — deterministic complexity/capability/budget routing
+- `src/vajra/routing/recovery.py` — bounded same-model/strategy/model/worker/human fallback sequence
+- `tests/routing/test_phase12_routing.py` — Phase 12 routing and recovery gate coverage
+- `docs/PHASE_12_IMPLEMENTATION.md` — roadmap-to-implementation mapping and closure evidence
+- `.github/workflows/phase12-validation.yml` — free hosted validation
+
+Phase 12 deliberately does not make Oracle mandatory, make Kaggle canonical, add paid providers, or permit routing to bypass Policy, Execution Broker, leases, or independent Verification.
 
 ## Phase 11 implementation
 
@@ -53,19 +56,6 @@ Phase 11 validates unattended durability under failure rather than only the happ
 - a real elapsed-time `SoakRunner` with monotonic timing and resource measurement;
 - soak metrics for memory, disk, events, context, worker leaks, stale leases, retries, verification/provider failures and clock anomalies.
 
-Implementation:
-
-- `src/vajra/durability/chaos.py` — deterministic chaos scheduling, retry-storm protection and soak metric contracts
-- `src/vajra/durability/kill_harness.py` — real disposable-process `SIGKILL` recovery harness
-- `src/vajra/durability/soak.py` — real elapsed-time soak runner
-- `tests/durability/test_phase11_chaos.py` — Phase 11 safety, divergence, retry and lease coverage
-- `tests/durability/test_phase11_harnesses.py` — kill-harness and soak-runner coverage
-- `docs/PHASE_11_IMPLEMENTATION.md` — roadmap-to-implementation mapping
-- `docs/PHASE_11_GATE_RESULT.md` — formal Phase 11 gate record
-- `.github/workflows/phase11-validation.yml` — free hosted validation
-
-Real multi-day soak runs remain operational measurements: accelerated tests never claim equivalence to real elapsed time.
-
 ## Phase 10 implementation
 
 - `src/vajra/autonomy/contracts.py` — structured plans, planned intents, progress measurements, reasoning boundary
@@ -74,29 +64,6 @@ Real multi-day soak runs remain operational measurements: accelerated tests neve
 - `docs/PHASE_10_IMPLEMENTATION.md` — roadmap-to-implementation mapping and closure evidence
 - `docs/PHASE_10_GATE_RESULT.md` — formal Phase 10 gate record
 - `.github/workflows/phase10-validation.yml` — free hosted validation
-
-The loop preserves the architectural boundary:
-
-> Model proposes → VAJRA decides → Policy authorizes → Broker executes → Sandbox/Workspace contains → Verifier proves → VAJRA records → Controller decides what happens next.
-
-## What Phase 10 adds
-
-- fresh context before reasoning;
-- context-bound structured plans;
-- proposal-only reasoning provider;
-- durable Run/Step/Attempt identities;
-- policy authorization before every execution intent;
-- broker-only execution;
-- worker lease/result acceptance and fencing;
-- independently frozen verification;
-- durable verification/evidence recording;
-- workspace artifact identity;
-- deterministic progress measurement;
-- bounded no-progress / retry protection;
-- recovery-driven re-planning;
-- explicit human escalation;
-- hard cycle and resource termination;
-- evidence-bound promotion and completion.
 
 ## Architectural Laws
 
@@ -124,6 +91,7 @@ The loop preserves the architectural boundary:
 - `docs/PHASE_10_GATE_RESULT.md` — Phase 10 gate closure record
 - `docs/PHASE_11_IMPLEMENTATION.md` — Phase 11 implementation and closure evidence
 - `docs/PHASE_11_GATE_RESULT.md` — Phase 11 gate closure record
+- `docs/PHASE_12_IMPLEMENTATION.md` — Phase 12 implementation and closure evidence
 
 ## Frozen Baseline
 
