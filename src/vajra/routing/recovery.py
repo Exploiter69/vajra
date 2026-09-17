@@ -24,11 +24,7 @@ class RecoveryPlan:
 
 
 class RoutingRecovery:
-    """Bounded fallback sequence for model/worker failures.
-
-    Recovery proposes the next resource; the normal Policy, Broker, lease,
-    and Verification gates remain mandatory for any resulting execution.
-    """
+    """Bounded fallback sequence for model/worker failures."""
 
     def __init__(self, router: CapabilityRouter, max_same_model_retries: int = 1) -> None:
         if max_same_model_retries < 0:
@@ -53,15 +49,14 @@ class RoutingRecovery:
             alternate = TaskProfile(profile.task, profile.complexity, profile.required_capabilities, profile.preferred_model, profile.strategy_id + ":alternate", profile.max_cost_units)
             return RecoveryPlan(RecoveryAction.DIFFERENT_STRATEGY, attempt_index + 1, "change reasoning strategy before changing resources", alternate)
 
-        # Prefer a fresh worker for the already-tried model before introducing
-        # a second model. This preserves the roadmap's separate worker-loss
-        # recovery path when model capacity itself is still viable.
         try:
             worker_switch = self._router.select_alternative(request_id, profile, excluded_workers=tried_workers)
         except RoutingError:
             worker_switch = None
-        if worker_switch is not None and worker_switch.worker_id not in tried_workers and worker_switch.model.canonical in tried_models:
-            return RecoveryPlan(RecoveryAction.DIFFERENT_WORKER, attempt_index + 1, "reuse a viable model on a fresh eligible worker", profile)
+        if worker_switch is not None and worker_switch.worker_id not in tried_workers:
+            if worker_switch.model.canonical in tried_models:
+                return RecoveryPlan(RecoveryAction.DIFFERENT_WORKER, attempt_index + 1, "reuse a viable model on a fresh eligible worker", profile)
+            return RecoveryPlan(RecoveryAction.DIFFERENT_MODEL, attempt_index + 1, "select an eligible model not previously tried", profile)
 
         try:
             model_switch = self._router.select_alternative(request_id, profile, excluded_models=tried_models)
@@ -69,6 +64,4 @@ class RoutingRecovery:
             model_switch = None
         if model_switch is not None and model_switch.model.canonical not in tried_models:
             return RecoveryPlan(RecoveryAction.DIFFERENT_MODEL, attempt_index + 1, "select an eligible model not previously tried", profile)
-        if worker_switch is not None and worker_switch.worker_id not in tried_workers:
-            return RecoveryPlan(RecoveryAction.DIFFERENT_WORKER, attempt_index + 1, "select an eligible worker not previously tried", profile)
         return RecoveryPlan(RecoveryAction.HUMAN, attempt_index + 1, "bounded routing alternatives are exhausted", profile)
