@@ -12,12 +12,29 @@ from vajra.runtime.local_durable_runtime import LocalDurableRuntime
 from .chaos import ChaosTarget
 
 
+_RECOVERY_ACTIONS = {
+    ChaosTarget.CONTROLLER: "restart_component_and_reconcile",
+    ChaosTarget.WORKER: "restart_component_and_reconcile",
+    ChaosTarget.MODEL: "retry_reasoning_with_fresh_context",
+    ChaosTarget.PROCESS: "restart_process_and_recover",
+    ChaosTarget.NETWORK: "reconnect_and_reconcile_external_state",
+    ChaosTarget.SANDBOX: "discard_sandbox_and_reconcile_workspace",
+    ChaosTarget.MACHINE_SIMULATION: "restore_from_durable_state_and_reconcile",
+}
+
+
 @dataclass(frozen=True)
 class KillResult:
     target: ChaosTarget
     exit_code: int
     durable_before_kill: bool
     recovered_after_restart: bool
+    recovery_action: str
+
+
+def recovery_action_for(target: ChaosTarget) -> str:
+    """Return the explicit recovery semantics for a modeled failure domain."""
+    return _RECOVERY_ACTIONS[target]
 
 
 def _durable_child(journal: str, execution_id: str) -> None:
@@ -30,11 +47,13 @@ def _durable_child(journal: str, execution_id: str) -> None:
 class KillHarness:
     """Exercise every Phase 11 kill domain through a real process boundary.
 
-    Controller, worker, model, network, sandbox and machine failures are
-    represented as failure-domain labels around the same disposable child.
-    This proves the common durable boundary and restart/recovery behavior; it
-    does not claim that the physical implementation of each external domain
-    has been independently killed on the host.
+    The disposable child proves the common durable/restart boundary. Each
+    failure domain also carries explicit recovery semantics so controller,
+    worker, model, process, network, sandbox and machine-simulation faults do
+    not collapse into an undocumented generic "retry" behavior.
+
+    Network, sandbox and machine-simulation entries are modeled domains: this
+    harness does not claim that those host resources were physically destroyed.
     """
 
     def __init__(self, workspace: str | Path) -> None:
@@ -66,10 +85,11 @@ class KillHarness:
             exit_code=child.exitcode if child.exitcode is not None else -1,
             durable_before_kill=durable_before_kill,
             recovered_after_restart=recovered,
+            recovery_action=recovery_action_for(target),
         )
 
     def run_all(self) -> tuple[KillResult, ...]:
         return tuple(self.run_target(target) for target in ChaosTarget)
 
 
-__all__ = ["KillHarness", "KillResult"]
+__all__ = ["KillHarness", "KillResult", "recovery_action_for"]
