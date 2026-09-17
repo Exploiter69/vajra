@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from .chaos import SoakMetrics, SoakSample
@@ -98,6 +99,22 @@ class SoakRunner:
         if samples[-1].elapsed_seconds != max(0.0, final_now - start):
             self._sample(samples, start, final_now)
         return SoakMetrics(tuple(samples))
+
+    def run_and_write(self, evidence_path: str | Path) -> SoakMetrics:
+        """Run the configured real-time campaign and atomically publish JSON evidence."""
+        metrics = self.run()
+        destination = Path(evidence_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "duration_seconds_configured": self.config.duration_seconds,
+            "sample_interval_seconds": self.config.sample_interval_seconds,
+            "samples": [asdict(sample) for sample in metrics.samples],
+            "completed_elapsed_seconds": metrics.last.elapsed_seconds,
+        }
+        temporary = destination.with_name(f".{destination.name}.tmp")
+        temporary.write_text(json.dumps(payload, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(destination)
+        return metrics
 
     def _sample(self, samples: list[SoakSample], start: float, now: float) -> None:
         counters = self._counters()
