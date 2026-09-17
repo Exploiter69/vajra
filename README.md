@@ -10,7 +10,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming.
 
-Phase 10 now wires those primitives into the first real objective-to-evidence loop:
+Phase 10 wired those primitives into the first real objective-to-evidence loop:
 
 ```text
 OBJECTIVE
@@ -38,29 +38,33 @@ DECIDE NEXT STEP
 repeat / recover / human / complete
 ```
 
-**Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a Phase 10 dependency.
-
-Validation is closed with 6 Phase 10 tests, 578 portable full-suite tests, compile validation and diff validation. Four physical gVisor integration tests are excluded from hosted CI because Gate D already has separate physical validation.
+**Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a project dependency.
 
 ## Phase 11 implementation
 
-Phase 11 validates unattended durability under failure rather than only the
-happy path:
+Phase 11 validates unattended durability under failure rather than only the happy path:
 
 - deterministic kill schedules for controller, worker, model, process, network, sandbox and machine simulation;
-- real process-kill/restart recovery coverage;
+- a real `SIGKILL` recovery harness across all seven modeled failure domains;
 - state-divergence detection without replacing Phase 7 reconciliation;
 - hard retry-storm termination;
 - lease-expiry/fencing race coverage;
 - explicit 1h / 12h / 3d / 7d / 30d long-run profiles;
-- soak metrics for memory, disk, events, context, worker leaks, stale leases,
-  retries, verification/provider failures and clock anomalies.
+- a real elapsed-time `SoakRunner` with monotonic timing and resource measurement;
+- soak metrics for memory, disk, events, context, worker leaks, stale leases, retries, verification/provider failures and clock anomalies.
 
-See `src/vajra/durability/chaos.py`,
-`tests/durability/test_phase11_chaos.py`,
-`docs/PHASE_11_IMPLEMENTATION.md`,
-`docs/PHASE_11_GATE_RESULT.md`, and
-`.github/workflows/phase11-validation.yml`.
+Implementation:
+
+- `src/vajra/durability/chaos.py` — deterministic chaos scheduling, retry-storm protection and soak metric contracts
+- `src/vajra/durability/kill_harness.py` — real disposable-process `SIGKILL` recovery harness
+- `src/vajra/durability/soak.py` — real elapsed-time soak runner
+- `tests/durability/test_phase11_chaos.py` — Phase 11 safety, divergence, retry and lease coverage
+- `tests/durability/test_phase11_harnesses.py` — kill-harness and soak-runner coverage
+- `docs/PHASE_11_IMPLEMENTATION.md` — roadmap-to-implementation mapping
+- `docs/PHASE_11_GATE_RESULT.md` — formal Phase 11 gate record
+- `.github/workflows/phase11-validation.yml` — free hosted validation
+
+Real multi-day soak runs remain operational measurements: accelerated tests never claim equivalence to real elapsed time.
 
 ## Phase 10 implementation
 
@@ -69,7 +73,7 @@ See `src/vajra/durability/chaos.py`,
 - `tests/autonomy/test_phase10_loop.py` — end-to-end and safety coverage
 - `docs/PHASE_10_IMPLEMENTATION.md` — roadmap-to-implementation mapping and closure evidence
 - `docs/PHASE_10_GATE_RESULT.md` — formal Phase 10 gate record
-- `.github/workflows/phase10-validation.yml` — free hosted validation for portable tests
+- `.github/workflows/phase10-validation.yml` — free hosted validation
 
 The loop preserves the architectural boundary:
 
@@ -111,13 +115,15 @@ The loop preserves the architectural boundary:
 
 - `docs/VAJRA_v0_Technical_Specification.txt` — canonical v0 architecture/specification
 - `docs/VAJRA_v1_Architecture_and_Roadmap_Specification.md` — converged roadmap
-- `docs/CURRENT_STATE.md` — implementation/gate state
+- `docs/CURRENT_STATE.md` — current implementation/gate state
 - `docs/PHASE_7_DESIGN_FREEZE.md` — Phase 7 safety/control design freeze
 - `docs/PHASE_8_IMPLEMENTATION.md` — context/workspace implementation
 - `docs/PHASE_9_IMPLEMENTATION.md` — verification/anti-gaming implementation
 - `docs/PHASE_9_GATE_RESULT.md` — Phase 9 closure record
 - `docs/PHASE_10_IMPLEMENTATION.md` — Phase 10 implementation and closure evidence
 - `docs/PHASE_10_GATE_RESULT.md` — Phase 10 gate closure record
+- `docs/PHASE_11_IMPLEMENTATION.md` — Phase 11 implementation and closure evidence
+- `docs/PHASE_11_GATE_RESULT.md` — Phase 11 gate closure record
 
 ## Frozen Baseline
 
