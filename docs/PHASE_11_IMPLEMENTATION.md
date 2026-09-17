@@ -4,10 +4,15 @@
 
 **IMPLEMENTED / VALIDATED / CLOSED**
 
-Phase 11 is the roadmap's reliability milestone: prove that VAJRA can continue
+Phase 11 is the roadmap reliability milestone: prove that VAJRA can continue
 or stop safely under sustained failure rather than merely completing a happy
 path. The canonical roadmap requires kill testing, state-divergence testing,
 retry-storm protection, lease chaos, and long-duration observation.
+
+The implementation is complete at the scope permitted by the available
+infrastructure. Real elapsed-time soak execution is exposed as a reusable
+runner; accelerated tests validate its mechanics but never claim equivalence
+to the requested real durations.
 
 ## Roadmap coverage
 
@@ -23,17 +28,23 @@ The deterministic chaos plan covers every roadmap kill target:
 - sandbox
 - machine simulation
 
-The plan is seeded and reproducible so a failing schedule can be replayed.
+`FaultInjector` produces a seeded, reproducible schedule and never mutates
+canonical state. `KillHarness` adds a real process boundary: for every named
+failure domain it starts a disposable child, durably records the execution,
+terminates the child with `SIGKILL`, restarts from the journal, and verifies the
+execution is recoverable. This validates the shared VAJRA durability boundary
+across all seven failure-domain labels.
 
-A real child-process kill test exercises `LocalDurableRuntime.start_execution`,
-process termination, restart, recovery discovery and completion.
+This is intentionally distinguished from physical failure of external
+infrastructure: the harness proves VAJRA recovery semantics for each modeled
+domain, while the actual host/network/sandbox/machine implementation remains
+an environment-specific concern.
 
 ### 11B — State divergence
 
-The phase records independent reality signals and verifies that a changed
-reality digest differs from the prior trusted observation. Existing Phase 7
-`RealityObserver` remains the canonical reconciliation boundary; Phase 11 does
-not create a second truth system.
+The phase verifies that changes to independent reality signals produce a new
+digest. Existing Phase 7 `RealityObserver` remains the canonical
+reconciliation boundary; Phase 11 does not create a second truth system.
 
 The invariant remains:
 
@@ -66,8 +77,9 @@ The roadmap profiles are represented explicitly:
 - 7 days
 - 30 days
 
-Actual elapsed-duration runs remain infrastructure-dependent. The soak metrics
-record:
+`SoakRunner` now provides a real elapsed-time execution mechanism with
+monotonic timing, configurable sampling, Linux RSS measurement, workspace
+disk measurement, and runtime-supplied counters for:
 
 - memory growth
 - disk growth
@@ -81,6 +93,8 @@ record:
 - clock anomalies
 
 No accelerated test is represented as proof of real elapsed-time behavior.
+The runner can execute the exact roadmap duration when an operator chooses to
+start that profile on available infrastructure.
 
 ## Safety invariants
 
@@ -107,12 +121,17 @@ The free GitHub Actions workflow runs:
 3. `python -m compileall -q src tests`
 4. `git diff --check`
 
+The Phase 11 suite additionally exercises the real `SIGKILL` recovery harness
+for all seven modeled kill domains and the real-duration soak runner using a
+fake monotonic clock for deterministic unit validation.
+
 The physical gVisor tests remain separately environment-specific and are not
 converted into hosted-CI proof.
 
 ## Closure rule
 
-Phase 11 is closed only when the Phase 11 suite passes together with the
-portable repository suite and static validation. Long-duration profiles are
-available for real soak execution; the roadmap explicitly allows those
-durations to depend on available infrastructure.
+Phase 11 is closed when the implementation, chaos/recovery suite, portable
+repository suite, compile validation, and diff validation pass. Real 1h/12h/
+3d/7d/30d elapsed-time campaigns are operational runs rather than requirements
+to hold the source tree hostage for thirty days; their results must be recorded
+separately and must not be fabricated from accelerated tests.
