@@ -5,6 +5,7 @@ from .chaos import (
     FaultInjector,
     FaultMode,
     LongRunProfile,
+    RetryStormDecision,
     RetryStormGuard,
     SoakMetrics,
     SoakSample,
