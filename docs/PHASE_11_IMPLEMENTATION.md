@@ -32,19 +32,25 @@ The deterministic chaos plan covers every roadmap kill target:
 canonical state. `KillHarness` adds a real process boundary: for every named
 failure domain it starts a disposable child, durably records the execution,
 terminates the child with `SIGKILL`, restarts from the journal, and verifies the
-execution is recoverable. This validates the shared VAJRA durability boundary
-across all seven failure-domain labels.
+execution is recoverable. Recovery semantics are explicit per domain:
+controller/worker restart-and-reconcile, model retry-with-fresh-context,
+process restart-and-recover, network reconnect-and-reconcile, sandbox discard-
+and-reconcile, and machine-simulation restore-and-reconcile.
 
-This is intentionally distinguished from physical failure of external
-infrastructure: the harness proves VAJRA recovery semantics for each modeled
-domain, while the actual host/network/sandbox/machine implementation remains
-an environment-specific concern.
+The harness validates the shared VAJRA durability boundary across all seven
+failure-domain labels. Network, sandbox and machine-simulation are modeled
+failure domains here; the harness does not claim that those host resources
+were physically destroyed. Actual physical infrastructure failures remain
+environment-specific.
 
 ### 11B — State divergence
 
-The phase verifies that changes to independent reality signals produce a new
-digest. Existing Phase 7 `RealityObserver` remains the canonical
-reconciliation boundary; Phase 11 does not create a second truth system.
+The phase verifies actual repository reality, not just two manually generated
+hashes. A temporary Git repository is observed through the real
+`RealityObserver` and `filesystem_digest`; then a tracked file is changed and
+Git status plus filesystem digests are re-observed. The test requires both
+reality signals to change and the observer to classify the divergence as
+recoverable.
 
 The invariant remains:
 
@@ -53,8 +59,10 @@ The invariant remains:
 ### 11C — Retry storms
 
 `RetryStormGuard` provides a deterministic per-run/per-step/per-failure
-threshold. Repeated identical failures become a termination decision at the
-threshold; the guard never executes or mutates work itself.
+threshold. In addition, `LocalDurableRuntime.retry()` is exercised through its
+actual journal boundary: an execution repeatedly fails and the runtime rejects
+the next retry after the configured retry limit. The runtime, rather than only
+an isolated helper, therefore provides the hard stop in this validation path.
 
 This complements the existing `BoundedAutonomy`, budget, no-progress and
 strategy-loop controls.
@@ -77,9 +85,9 @@ The roadmap profiles are represented explicitly:
 - 7 days
 - 30 days
 
-`SoakRunner` now provides a real elapsed-time execution mechanism with
-monotonic timing, configurable sampling, Linux RSS measurement, workspace
-disk measurement, and runtime-supplied counters for:
+`SoakRunner` provides a real elapsed-time execution mechanism with monotonic
+timing, configurable sampling, Linux RSS measurement, workspace disk
+measurement, and runtime-supplied counters for:
 
 - memory growth
 - disk growth
@@ -91,6 +99,11 @@ disk measurement, and runtime-supplied counters for:
 - verification failures/degradation signals
 - provider failures
 - clock anomalies
+
+`run_and_write()` persists a complete JSON evidence record containing the
+configured duration, sampling interval, elapsed completion time, and every
+sample. This makes real campaigns reproducible and reviewable without adding
+a paid telemetry dependency.
 
 No accelerated test is represented as proof of real elapsed-time behavior.
 The runner can execute the exact roadmap duration when an operator chooses to
@@ -122,7 +135,8 @@ The free GitHub Actions workflow runs:
 4. `git diff --check`
 
 The Phase 11 suite additionally exercises the real `SIGKILL` recovery harness
-for all seven modeled kill domains and the real-duration soak runner using a
+for all seven modeled kill domains, actual Git/filesystem reconciliation, the
+real durable-runtime retry boundary, and the real-duration soak runner using a
 fake monotonic clock for deterministic unit validation.
 
 The physical gVisor tests remain separately environment-specific and are not
@@ -133,5 +147,5 @@ converted into hosted-CI proof.
 Phase 11 is closed when the implementation, chaos/recovery suite, portable
 repository suite, compile validation, and diff validation pass. Real 1h/12h/
 3d/7d/30d elapsed-time campaigns are operational runs rather than requirements
-to hold the source tree hostage for thirty days; their results must be recorded
-separately and must not be fabricated from accelerated tests.
+to hold the source tree hostage for thirty days; their results must be
+recorded separately and must not be fabricated from accelerated tests.
