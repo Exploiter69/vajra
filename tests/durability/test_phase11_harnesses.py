@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -74,6 +75,31 @@ def test_soak_runner_uses_real_duration_contract_without_sleeping_in_unit_test(
     assert metrics.last.event_count > metrics.first.event_count
     assert metrics.last.context_items == 1
     assert metrics.samples
+
+
+def test_soak_runner_persists_complete_evidence_record(tmp_path: Path):
+    clock = [0.0]
+
+    def monotonic() -> float:
+        return clock[0]
+
+    def sleep(seconds: float) -> None:
+        clock[0] += seconds
+
+    evidence = tmp_path / "soak-evidence.json"
+    metrics = SoakRunner(
+        SoakConfig(4.0, 2.0, tmp_path),
+        counter_provider=lambda: SoakCounters(event_count=2),
+        monotonic=monotonic,
+        sleep=sleep,
+    ).run_and_write(evidence)
+
+    payload = json.loads(evidence.read_text(encoding="utf-8"))
+    assert payload["duration_seconds_configured"] == 4.0
+    assert payload["sample_interval_seconds"] == 2.0
+    assert payload["completed_elapsed_seconds"] == metrics.last.elapsed_seconds
+    assert len(payload["samples"]) == len(metrics.samples)
+    assert evidence.stat().st_size > 0
 
 
 def test_soak_runner_rejects_negative_runtime_counters(tmp_path: Path):
