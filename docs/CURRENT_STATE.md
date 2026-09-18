@@ -90,6 +90,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 11 — Long-run durability + chaos | COMPLETE / Gate PASSED | kill harness, divergence, retry storm, lease chaos, soak runner and portable CI |
 | Phase 12 — Model + worker routing | COMPLETE / Gate PASSED | gateway, capability routing, switching/recovery, routing evidence, portable CI |
 | Phase 13 — Always-on control plane | COMPLETE / CLOSED | daemon, durable queue, human controls, scheduling, API |
+| Phase 14 — Engineering Memory | IMPLEMENTED / GATE PENDING | failure, repository, context memory and conflict awareness |
 
 ---
 
@@ -340,7 +341,7 @@ Until a later roadmap phase or explicit design decision:
 
 ## 15. Next Phase Boundary
 
-Phase 14 is complete and closed. The next roadmap boundary is **PHASE 15 — PRODUCTION HARDENING**.
+Phase 14 is implemented and awaiting final local/remote gate verification. The next roadmap boundary is **PHASE 15 — PRODUCTION HARDENING**.
 
 The routing layer remains subordinate to the existing authority chain:
 
