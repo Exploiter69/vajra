@@ -1,0 +1,113 @@
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import time
+from pathlib import Path
+from urllib.request import Request, urlopen
+
+from vajra.runtime.kaggle_worker import KaggleWorkerAdapter
+
+
+ROOT = Path("/kaggle/working")
+JOB_PATH = ROOT / "worker_job.json"
+RESULT_PATH = ROOT / "worker_result.json"
+MODEL = os.environ.get("VAJRA_MODEL", "qwen2.5-coder:32b")
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+
+
+def run(command: tuple[str, ...]) -> None:
+    subprocess.run(command, check=True, text=True)
+
+
+def ensure_ollama() -> None:
+    if subprocess.run(("bash", "-lc", "command -v ollama"), capture_output=True).returncode != 0:
+        run(("bash", "-lc", "curl -fsSL https://ollama.com/install.sh | sh"))
+
+    probe = subprocess.run(
+        ("bash", "-lc", "ollama list"),
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0:
+        run(("ollama", "serve"))
+        time.sleep(3)
+
+    listing = subprocess.run(
+        ("ollama", "list"), capture_output=True, text=True, check=True
+    ).stdout
+    if MODEL not in listing:
+        run(("ollama", "pull", MODEL))
+
+
+def infer(prompt: str) -> tuple[str, dict]:
+    payload = json.dumps(
+        {
+            "model": MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "format": "json",
+        }
+    ).encode("utf-8")
+    request = Request(
+        f"{OLLAMA_URL}/api/generate",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(request, timeout=600) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    return str(data.get("response", "")), {
+        "prompt_eval_count": int(data.get("prompt_eval_count") or 0),
+        "eval_count": int(data.get("eval_count") or 0),
+        "total_duration": int(data.get("total_duration") or 0),
+    }
+
+
+def main() -> int:
+    adapter = KaggleWorkerAdapter()
+    job = adapter.decode_job(JOB_PATH.read_text(encoding="utf-8"))
+    prompt = job.context_bundle.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("worker job has no prompt")
+
+    try:
+        ensure_ollama()
+        response, usage = infer(prompt)
+        result = {
+            "status": "completed",
+            "correlation_id": job.correlation_id,
+            "structured_result": {"response": response},
+            "artifacts": [],
+            "logs": ["qwen inference completed through Ollama"],
+            "usage": usage,
+            "errors": [],
+            "evidence_refs": [],
+        }
+    except Exception as exc:
+        result = {
+            "status": "failed",
+            "correlation_id": job.correlation_id,
+            "structured_result": {},
+            "artifacts": [],
+            "logs": [],
+            "usage": {},
+            "errors": [f"{type(exc).__name__}: {exc}"],
+            "evidence_refs": [],
+        }
+
+    envelope = {
+        "protocol_version": adapter.protocol_version,
+        "type": "worker_result",
+        "result": result,
+    }
+    RESULT_PATH.write_text(
+        json.dumps(envelope, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
