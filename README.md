@@ -6,9 +6,9 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 17 — Controlled Self-Improvement: IMPLEMENTED / GATE PENDING.**
+**Phase 17 — Controlled Self-Improvement: COMPLETE / LOCAL GATE PASSED.**
 
-Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior. Phase 12 added capability-aware model/worker routing. Phase 13 added the always-on control plane. Phase 14 adds provenance-bound memory without making history authoritative.
+Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior. Phase 12 added capability-aware model/worker routing. Phase 13 added the always-on control plane. Phase 14 adds provenance-bound memory without making history authoritative. Phases 15 and 16 add production hardening and advanced autonomy. Phase 17 adds controlled self-improvement behind mandatory verification, security verification, human approval, and explicit promotion.
 
 **Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a project dependency.
 
