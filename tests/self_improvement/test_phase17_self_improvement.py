@@ -61,7 +61,7 @@ def test_full_lifecycle_requires_isolation_verification_security_and_human(tmp_p
     events = []
     p = proposal()
     engine.propose(p)
-    engine.isolate(p, lambda branch, base: events.append(("branch", branch, base)))
+    engine.isolate(p, lambda branch, base: events.append(("branch", branch, base)), lambda base, revision: ("src/vajra/routing/router.py",))
     engine.test(p, lambda revision: events.append(("test", revision)) or True)
     engine.verify(p, lambda revision: events.append(("verify", revision)) or True)
     engine.security_verify(p, lambda revision: events.append(("security", revision)) or True)
@@ -75,7 +75,7 @@ def test_tests_or_verification_failure_cannot_promote(tmp_path: Path):
     engine = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
     p = proposal()
     engine.propose(p)
-    engine.isolate(p, lambda *_: None)
+    engine.isolate(p, lambda *_: None, lambda base, revision: ("src/vajra/routing/router.py",))
     with pytest.raises(SelfImprovementError):
         engine.test(p, lambda _: False)
     assert engine.store.state("p1") is ProposalState.ISOLATED
@@ -183,3 +183,27 @@ def test_journal_tampering_is_detected(tmp_path: Path):
     )
     with pytest.raises(SelfImprovementError, match="journal"):
         SelfImprovementStore(path)
+
+
+def test_actual_revision_scope_cannot_claim_safe_paths(tmp_path: Path):
+    engine = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
+    p = proposal()
+    engine.propose(p)
+    with pytest.raises(SelfImprovementError, match="protected"):
+        engine.isolate(
+            p,
+            lambda *_: None,
+            lambda base, revision: ("src/vajra/policy/authority.py",),
+        )
+
+
+def test_declared_and_actual_revision_paths_must_match(tmp_path: Path):
+    engine = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
+    p = proposal()
+    engine.propose(p)
+    with pytest.raises(SelfImprovementError, match="declared and actual"):
+        engine.isolate(
+            p,
+            lambda *_: None,
+            lambda base, revision: ("src/vajra/routing/router.py", "src/vajra/routing/workers.py"),
+        )
