@@ -167,7 +167,11 @@ def build_loop(workspace: Path, revision: str, run_id: str):
         criteria_id="vajra-run-2-criteria",
         version="1",
         objective_digest=stable_digest(objective),
-        predicates=(AcceptancePredicate("tests", "1", "project tests pass"),),
+        predicates=(
+            AcceptancePredicate("implementation", "1", "multiply implementation exists"),
+            AcceptancePredicate("regression", "1", "multiply regression test exists"),
+            AcceptancePredicate("tests", "1", "project tests pass"),
+        ),
         required_evidence=("verification_result",),
         verification_plan_ref="vajra-run-2-criteria",
         created_at=datetime.now(timezone.utc),
@@ -177,6 +181,18 @@ def build_loop(workspace: Path, revision: str, run_id: str):
         objective,
         criteria,
         (
+            {
+                "predicate_id": "implementation",
+                "kind": "FILE_CONTAINS",
+                "path": "calculator.py",
+                "needle": "def multiply",
+            },
+            {
+                "predicate_id": "regression",
+                "kind": "FILE_CONTAINS",
+                "path": "test_calculator.py",
+                "needle": "multiply(6, 7) == 42",
+            },
             {
                 "predicate_id": "tests",
                 "kind": "COMMAND_EXIT",
