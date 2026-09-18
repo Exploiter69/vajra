@@ -116,9 +116,14 @@ class SelfImprovementEngine:
         self,
         proposal: ImprovementProposal,
         create_branch: Callable[[str, str], None],
+        inspect_changed_paths: Callable[[str, str], tuple[str, ...]],
     ) -> None:
         self._require(proposal, ProposalState.PROPOSED)
         self._validate_scope(proposal)
+        actual_paths = tuple(inspect_changed_paths(proposal.base_revision, proposal.proposed_revision))
+        self._validate_actual_scope(actual_paths)
+        if set(self._normalize_paths(actual_paths)) != set(self._normalize_paths(proposal.changed_paths)):
+            raise SelfImprovementError("declared and actual self-improvement paths differ")
         branch = f"vajra-improvement/{proposal.proposal_id}"
         create_branch(branch, proposal.base_revision)
         self.store.record(proposal.proposal_id, ProposalState.ISOLATED, 2)
@@ -190,6 +195,20 @@ class SelfImprovementEngine:
                     f"proposal attempts to modify protected authority surface: {path}"
                 )
 
+    def _validate_actual_scope(self, paths: tuple[str, ...]) -> None:
+        if not paths:
+            raise SelfImprovementError("self-improvement revision has no changed paths")
+        for path in paths:
+            normalized = self._normalize_paths((path,))[0]
+            if normalized in self.PROTECTED_NAMES or any(normalized.startswith(prefix) for prefix in self.PROTECTED_PREFIXES):
+                raise SelfImprovementError(
+                    f"proposal attempts to modify protected authority surface: {normalized}"
+                )
+
+    @staticmethod
+    def _normalize_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
+        slash = chr(92)
+        return tuple(path.replace(slash, "/").lstrip("./") for path in paths)
     def _require(self, proposal: ImprovementProposal, expected: ProposalState) -> None:
         if self.store.state(proposal.proposal_id) is not expected:
             raise SelfImprovementError(
