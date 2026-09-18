@@ -3,7 +3,7 @@
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
 **Phase:** Phase 17 — Controlled Self-Improvement  
-**Implementation status:** Phase 17 implemented / gate pending  
+**Implementation status:** Phase 17 COMPLETE / local gate PASSED  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -93,7 +93,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 14 — Engineering Memory | COMPLETE / CLOSED | failure, repository, context memory and conflict awareness |
 | Phase 15 — Production Hardening | COMPLETE / CLOSED | security, resource controls, observability; final local gate passed |
 | Phase 16 — Advanced Autonomy | COMPLETE / CLOSED | multi-step, multi-repository, specialized workers, durable long-horizon bounds; 9 dedicated tests and 661 portable-suite tests passed |
-| Phase 17 — Controlled Self-Improvement | IMPLEMENTED / Gate PENDING | bounded improvement proposals, protected authority surfaces, isolated verification/security gates, explicit human promotion, durable journal |
+| Phase 17 — Controlled Self-Improvement | COMPLETE / LOCAL GATE PASSED | bounded improvement proposals, protected authority surfaces, isolated verification/security gates, explicit human promotion, durable journal |
 
 ---
 
@@ -315,7 +315,7 @@ No vector database, embeddings, autonomous memory rewriting, model-controlled me
 
 ## 13. Phase 16 — Advanced Autonomy
 
-**Status: IMPLEMENTED / GATE PENDING**
+**Status: COMPLETE / CLOSED**
 
 Phase 16 implements 16A–16D from the canonical roadmap. Multi-step engineering is represented as a dependency-validated stage graph; multi-repository work requires explicit repository authority; specialized workers are deterministic singular role resources rather than a default swarm; and long-horizon objectives use durable stage checkpoints plus hard bounds and resume behavior.
 
@@ -351,7 +351,7 @@ Until a later roadmap phase or explicit design decision:
 
 ## 16. Next Phase Boundary
 
-Phase 15 is complete and closed after the final local gate. Phase 16 is implemented and its final local gate is pending. The next roadmap boundary after Phase 16 closure is **PHASE 17 — CONTROLLED SELF-IMPROVEMENT**.
+Phases 15 and 16 are complete and closed. Phase 17 is also complete after its final local gate. The next roadmap boundary is **PHASE 18+ — RESEARCH / LONG HORIZON**.
 
 The routing layer remains subordinate to the existing authority chain:
 
