@@ -32,7 +32,7 @@ def template(tmp_path):
     (path / "kernel-metadata.json").write_text(
         json.dumps({"id": "placeholder", "code_file": "worker.py"}), encoding="utf-8"
     )
-    (path / "worker.py").write_text("print('worker')\n", encoding="utf-8")
+    (path / "worker.py").write_text("EMBEDDED_JOB_JSON: str | None = None\nprint('worker')\n", encoding="utf-8")
     return path
 
 
@@ -72,6 +72,10 @@ def test_batch_transport_pushes_polls_downloads_and_decodes(monkeypatch, tmp_pat
 
     assert result.status == "completed"
     assert result.correlation_id == "corr-1"
+    kernel_path = next(x[1] for x in calls if x[0] == "init")
+    worker_source = (kernel_path / "worker.py").read_text(encoding="utf-8")
+    assert "EMBEDDED_JOB_JSON: str | None = '" in worker_source
+    assert "return JSON" in worker_source
     assert [x[0] for x in calls] == ["init", "start", "status", "status", "output"]
 
 
