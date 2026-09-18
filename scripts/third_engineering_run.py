@@ -19,6 +19,7 @@ from vajra.policy.contracts import PolicyDecisionType
 from vajra.policy.evaluator import PolicyEvaluator, PolicyRule
 from vajra.routing.contracts import ModelIdentity
 from vajra.runtime.remote_model import build_remote_gateway
+from vajra.runtime.worker_provider import HTTPWorkerProvider, WorkerProviderError
 from vajra.runtime.remote_reasoner import GatewayReasoner
 from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
@@ -117,9 +118,21 @@ def main() -> int:
     args = parser.parse_args()
 
     identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "http-worker")
+    provider = HTTPWorkerProvider(
+        infer_url=args.endpoint,
+        expected_model=identity.model,
+    )
+    try:
+        endpoint = provider.ensure_ready()
+    except WorkerProviderError as exc:
+        print(f"worker_not_ready: {exc}")
+        print("No project mutation or model call was attempted.")
+        print("Start the configured worker session and expose its /health, /capabilities, and /infer endpoints, then rerun.")
+        return 2
+
     workspace = args.workspace.expanduser().resolve()
     revision = prepare_workspace(workspace)
-    loop, manager = build_loop(workspace, revision, args.endpoint, identity, args.run_id)
+    loop, manager = build_loop(workspace, revision, endpoint.infer_url, identity, args.run_id)
 
     print("=== VAJRA ENGINEERING RUN #3 ===")
     print(f"workspace: {workspace}")
@@ -127,6 +140,9 @@ def main() -> int:
     print(f"run_id: {args.run_id}")
     print(f"model: {identity.canonical}")
     print(f"endpoint: {args.endpoint}")
+    print(f"worker: {endpoint.worker_id}")
+    print(f"protocol: {endpoint.protocol}")
+    print(f"capabilities: {', '.join(endpoint.capabilities) or 'none advertised'}")
     print("authority: model proposes; VAJRA policy/broker/verifier decide")
     print()
     result = loop.run(args.run_id)
