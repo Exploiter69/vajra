@@ -233,3 +233,23 @@ class AdvancedAutonomyEngine:
     def validate(self, objective: MultiStepObjective) -> None:
         if len(objective.stages) > self.limits.max_stages:
             raise AdvancedAutonomyError("objective exceeds maximum stage count")
+
+
+def _validate_dag(stages: tuple[AdvancedStage, ...]) -> None:
+    ids = [stage.stage_id for stage in stages]
+    if len(ids) != len(set(ids)):
+        raise ValueError("stage IDs must be unique")
+    known = set(ids)
+    for stage in stages:
+        if any(dep not in known for dep in stage.depends_on):
+            raise ValueError(f"stage {stage.stage_id!r} has an unknown dependency")
+        if stage.stage_id in stage.depends_on:
+            raise ValueError(f"stage {stage.stage_id!r} cannot depend on itself")
+    remaining = set(ids)
+    done: set[str] = set()
+    while remaining:
+        ready = {sid for sid in remaining if set(next(s for s in stages if s.stage_id == sid).depends_on).issubset(done)}
+        if not ready:
+            raise ValueError("stage dependency graph contains a cycle")
+        done.update(ready)
+        remaining -= ready
