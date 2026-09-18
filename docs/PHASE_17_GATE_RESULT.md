@@ -2,7 +2,7 @@
 
 ## Status
 
-**IMPLEMENTED / GATE PENDING**
+**COMPLETE / CLOSED**
 
 The implementation maps to the roadmap's Controlled Self-Improvement scope.
 
@@ -22,7 +22,7 @@ The implementation maps to the roadmap's Controlled Self-Improvement scope.
 - unsafe-path and protected-surface rejection;
 - no automatic authority-model modification.
 
-## Required local gate
+## Final local gate evidence
 
 ```bash
 cd ~/vajra && \
@@ -43,4 +43,11 @@ git diff --check && printf 'PASS\\n' && \
 printf '\\n=== VAJRA PHASE 17 LOCAL GATE: PASS ===\\n'
 ```
 
-Phase 17 remains open until this gate passes.
+Final local gate passed on `main` after the journal-contiguity fix in commit `e9ed458`:
+
+- Dedicated Phase 17 suite: **17 passed**
+- Portable full suite: **678 passed, 4 deselected** (`gvisor_integration`)
+- `python -m compileall -q src tests`: **PASS**
+- `git diff --check`: **PASS**
+
+**Phase 17 is COMPLETE / CLOSED.** The next roadmap boundary is **Phase 18+ — Research / Long Horizon**.
