@@ -2,8 +2,8 @@
 
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
-**Phase:** Phase 13 — Always-On Control Plane complete  
-**Implementation status:** Phase 13 complete / closed  
+**Phase:** Phase 14 — Engineering Memory complete  
+**Implementation status:** Phase 14 complete / closed  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -89,7 +89,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 10 — Autonomous engineering loop | COMPLETE / Gate PASSED | end-to-end loop, safety boundaries, portable CI |
 | Phase 11 — Long-run durability + chaos | COMPLETE / Gate PASSED | kill harness, divergence, retry storm, lease chaos, soak runner and portable CI |
 | Phase 12 — Model + worker routing | COMPLETE / Gate PASSED | gateway, capability routing, switching/recovery, routing evidence, portable CI |
-| Phase 13 — Always-on control plane | IMPLEMENTED / GATE PENDING | daemon, durable queue, human controls, scheduling, API |
+| Phase 13 — Always-on control plane | COMPLETE / CLOSED | daemon, durable queue, human controls, scheduling, API |
 
 ---
 
@@ -279,7 +279,37 @@ The control plane does not own canonical Run state, execute model/worker work it
 
 ---
 
-## 12. Current Limitations
+## 12. Phase 14 — Engineering Memory
+
+**Status: COMPLETE / CLOSED**
+
+Phase 14 implements the canonical roadmap's 14A–14D scope without making historical memory authoritative.
+
+### 14A — Failure Memory
+
+Provenance-bound failure signatures and outcomes are stored with Run/Step/Attempt identity, repository state, and mandatory source references.
+
+### 14B — Repository Memory
+
+Architecture, conventions, structured decisions, and verification history are retained with repository revision/digest. Current-state validation marks historical repository memory stale when authoritative repository state changes.
+
+### 14C — Context Memory
+
+Bounded context items are retained with repository revision, context digest, item provenance, and source references. Current revision/digest changes invalidate historical context rather than silently reusing it.
+
+### 14D — Conflict Awareness
+
+Current repository and verification truth outrank memory. Explicit MemoryConflict records use CURRENT_TRUTH_WINS. Corrections are append-only via supersedes; superseded history remains auditable but is hidden from normal queries.
+
+### Phase 14 validation
+
+The Phase 14 workflow runs dedicated memory tests, the portable full suite, compilation, and git diff checking. Memory tests cover persistence/reload, provenance enforcement, repository/context staleness, deterministic querying, supersession, identity separation, and journal tamper detection.
+
+No vector database, embeddings, autonomous memory rewriting, model-controlled memory authority, or paid infrastructure was introduced.
+
+---
+
+## 13. Current Limitations
 
 1. Oracle-hosted infrastructure remains unproven because the project is constrained to ₹0.00/no paid infrastructure.
 2. Physical gVisor proof is environment-specific and is not reproduced by hosted CI.
@@ -290,11 +320,11 @@ These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requi
 
 ---
 
-## 13. Explicitly Deferred
+## 14. Explicitly Deferred
 
 Until a later roadmap phase or explicit design decision:
 
-- always-on control plane / daemon (Phase 13)
+- production hardening (Phase 15)
 - distributed worker pool beyond the Phase 12 capability abstraction
 - multiple concurrent Runs
 - Kubernetes
@@ -304,13 +334,13 @@ Until a later roadmap phase or explicit design decision:
 - Telegram as autonomous control plane
 - Needle as mandatory v0 dependency
 - ASTRA legacy core as a runtime dependency
-- premature v1 infrastructure
+- premature research/future infrastructure
 
 ---
 
-## 14. Next Phase Boundary
+## 15. Next Phase Boundary
 
-Phase 13 is complete and closed. The next roadmap boundary is **PHASE 14 — ENGINEERING MEMORY**.
+Phase 14 is complete and closed. The next roadmap boundary is **PHASE 15 — PRODUCTION HARDENING**.
 
 The routing layer remains subordinate to the existing authority chain:
 
@@ -328,7 +358,7 @@ No routing layer may become an authority bypass.
 
 ---
 
-## 15. Frozen Baseline Rule
+## 16. Frozen Baseline Rule
 
 `v0.1.0` at commit `fb3cca5` is immutable.
 
