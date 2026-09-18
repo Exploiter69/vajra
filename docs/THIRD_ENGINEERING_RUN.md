@@ -143,3 +143,73 @@ VAJRA promotion authority completes the run
 
 The remote model never receives authority to mutate the repository, change
 canonical Run state, approve its own work, or promote a Run.
+
+## Headless Kaggle batch Run #3
+
+Run #3 can now use Kaggle as a disposable batch GPU worker without a browser tab or
+live inbound HTTP endpoint.
+
+The repository includes:
+
+- `infra/kaggle/burst_worker/` — Kaggle kernel template;
+- `KaggleBatchWorkerTransport` — submits one bounded `WorkerJob`, polls the
+  kernel, downloads `worker_result.json`, and checks correlation;
+- the existing `KaggleWorkerAdapter` — wire-format boundary;
+- `build_kaggle_batch_gateway()` — connects that transport to ModelGateway.
+
+The batch worker bootstraps Ollama when necessary, ensures
+`qwen2.5-coder:32b` is present, performs one JSON-mode generation, and saves the
+result. The worker is proposal-only; it has no VAJRA Run-state authority.
+
+### One-time Kaggle setup
+
+Install/authenticate the Kaggle CLI on the machine running VAJRA and create a
+Kaggle kernel identity for the template. The identity must be in
+`owner/kernel-slug` form. The kernel metadata is rewritten with that identity
+before each push.
+
+The Kaggle runtime must allow GPU and internet access. The template requests
+2x T4 through `GpuT4x2`; actual availability is provider-controlled.
+
+### Batch command
+
+From the VAJRA checkout:
+
+```bash
+cd ~/vajra
+git pull --ff-only origin main
+rm -rf ~/vajra-run-3-project
+VAJRA_KAGGLE_MODE=batch \
+VAJRA_KAGGLE_KERNEL_REF="OWNER/KERNEL-SLUG" \
+VAJRA_KAGGLE_KERNEL_TEMPLATE="$PWD/infra/kaggle/burst_worker" \
+PYTHONPATH=src python scripts/third_engineering_run.py
+```
+
+The command creates the disposable project only after the batch configuration
+preflight succeeds. The transport then:
+
+1. creates a temporary kernel payload;
+2. injects the signed VAJRA WorkerJob JSON;
+3. runs `kaggle kernels push`;
+4. polls `kaggle kernels status`;
+5. rejects failed/cancelled/expired jobs;
+6. downloads the latest kernel output;
+7. requires `worker_result.json`;
+8. decodes the VAJRA WorkerResult;
+9. rejects a correlation mismatch;
+10. returns the proposal to ModelGateway.
+
+This is a **batch worker**, not a permanent worker. Do not describe a successful
+Kaggle batch as proof of an always-on HTTP worker.
+
+### What is and is not proven
+
+The code and tests prove the local transport contract and its safety boundaries.
+They do **not** prove that the physical Kaggle account can currently schedule a
+T4x2 kernel, pull the 32B model within the configured deadline, or complete the
+full Run #3. Those are physical acceptance gates and require one real Kaggle
+execution.
+
+After the first successful batch execution, the output should be treated as
+the next VAJRA evidence point rather than as permission to remove the independent
+policy, broker, verifier, or acceptance boundaries.
