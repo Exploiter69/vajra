@@ -2,8 +2,8 @@
 
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
-**Phase:** Phase 12 — Model + Worker Routing complete  
-**Implementation status:** Phase 12 complete / closed  
+**Phase:** Phase 13 — Always-On Control Plane complete  
+**Implementation status:** Phase 13 implementation complete / gate pending  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -89,6 +89,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 10 — Autonomous engineering loop | COMPLETE / Gate PASSED | end-to-end loop, safety boundaries, portable CI |
 | Phase 11 — Long-run durability + chaos | COMPLETE / Gate PASSED | kill harness, divergence, retry storm, lease chaos, soak runner and portable CI |
 | Phase 12 — Model + worker routing | COMPLETE / Gate PASSED | gateway, capability routing, switching/recovery, routing evidence, portable CI |
+| Phase 13 — Always-on control plane | IMPLEMENTED / GATE PENDING | daemon, durable queue, human controls, scheduling, API |
 
 ---
 
@@ -254,12 +255,26 @@ Routing only selects resources. It does not authorize operations, mutate canonic
 
 `tests/routing/test_phase12_routing.py` covers model identity/version/usage, gateway failure behavior, complexity classification, capability fit, deterministic selection, budget enforcement, fail-closed routing, routing evidence, model/worker switching, bounded retries, strategy changes and human escalation. `.github/workflows/phase12-validation.yml` runs the routing suite, portable full suite, compilation and diff checks.
 
+### Phase 13 — Always-On Control Plane
+
+**Status: IMPLEMENTED / GATE PENDING**
+
+Phase 13 implements the canonical roadmap's 13A–13E scope:
+
+- 13A daemon with clean start/stop and restart-aware dispatch;
+- 13B append-only fsync-backed durable queue with claim recovery and executor-failure requeue;
+- 13C pause/resume/cancel/abort/retry/approve/reject human controls through RunManager and TransitionAuthority;
+- 13D persisted one-shot and periodic schedules plus registered background-job handlers;
+- 13E localhost-by-default HTTP/JSON API as a replaceable control surface.
+
+The control plane does not own canonical Run state, execute model/worker work itself, or make Telegram/external cron a source of truth. PAUSED stops the current autonomous-loop invocation until an explicit human resume. CANCEL is resumable; ABORT is terminal.
+
 ### Explicit boundaries
 
 - Oracle remains optional/unproven under the ₹0.00 constraint.
 - Kaggle remains an ephemeral worker, never canonical state.
 - No paid inference or infrastructure was introduced.
-- No always-on daemon was introduced; that is Phase 13.
+- Phase 13 now provides the always-on control plane.
 - No Engineering Memory was introduced; that is Phase 14.
 
 ---
@@ -295,7 +310,7 @@ Until a later roadmap phase or explicit design decision:
 
 ## 14. Next Phase Boundary
 
-Phase 12 is complete. The next roadmap boundary is **PHASE 13 — ALWAYS-ON CONTROL PLANE**.
+Phase 13 is implemented and awaiting final local/remote gate verification. The next roadmap boundary is **PHASE 14 — ENGINEERING MEMORY**.
 
 The routing layer remains subordinate to the existing authority chain:
 

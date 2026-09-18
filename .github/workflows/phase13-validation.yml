@@ -1,0 +1,25 @@
+name: Phase 13 always-on control plane validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  phase13:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install --upgrade pip pytest
+      - name: Phase 13 tests
+        run: pytest -q tests/control_plane
+      - name: Portable full suite
+        run: pytest -q -k 'not gvisor_integration'
+      - name: Compile
+        run: python -m compileall -q src tests
+      - name: Diff check
+        run: git diff --check

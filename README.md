@@ -6,7 +6,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 12 — Model + Worker Routing: COMPLETE / CLOSED.**
+**Phase 13 — Always-On Control Plane: IMPLEMENTED / GATE PENDING.**
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior before routing was enabled.
 
@@ -29,6 +29,18 @@ POLICY → BROKER → VERIFICATION
 ```
 
 **Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a project dependency.
+
+## Phase 13 implementation
+
+- `src/vajra/control_plane/plane.py` — always-on daemon, durable queue dispatch, human controls and scheduler
+- `src/vajra/control_plane/store.py` — append-only fsync-backed queue/schedule/control journal with restart recovery
+- `src/vajra/control_plane/contracts.py` — control commands and schedule contracts
+- `src/vajra/control_plane/api.py` — localhost-by-default HTTP/JSON control surface
+- `tests/control_plane/test_phase13_control_plane.py` — Phase 13 gate coverage
+- `docs/PHASE_13_IMPLEMENTATION.md` — roadmap-to-implementation mapping
+- `.github/workflows/phase13-validation.yml` — free hosted validation
+
+Phase 13 preserves canonical Run ownership and routes all Run mutations through RunManager/TransitionAuthority. `CANCEL` is resumable pause/cancellation; `ABORT` is terminal. Scheduled jobs enter the same durable Run queue rather than becoming an external source of truth.
 
 ## Phase 12 implementation
 
@@ -92,6 +104,8 @@ Phase 11 validates unattended durability under failure rather than only the happ
 - `docs/PHASE_11_IMPLEMENTATION.md` — Phase 11 implementation and closure evidence
 - `docs/PHASE_11_GATE_RESULT.md` — Phase 11 gate closure record
 - `docs/PHASE_12_IMPLEMENTATION.md` — Phase 12 implementation and closure evidence
+- `docs/PHASE_13_IMPLEMENTATION.md` — Phase 13 implementation and roadmap mapping
+- `docs/PHASE_13_GATE_RESULT.md` — Phase 13 gate closure record
 
 ## Frozen Baseline
 

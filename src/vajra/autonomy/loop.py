@@ -31,7 +31,7 @@ from .contracts import EngineeringPlan, LoopPhase, LoopResult, NullLoopObserver,
 
 
 class AutonomousLoopError(RuntimeError):
-    """Raised when the Phase 10 loop cannot continue safely."""
+    pass
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,6 @@ class WorkspaceRuntime:
 
 
 class _RunStateRecorder:
-    """Narrow Phase 10 state/evidence writer behind canonical persistence."""
-
     def __init__(self, state_store: StateStore, event_store: EventStore) -> None:
         self._state = state_store
         self._events = event_store
@@ -85,8 +83,6 @@ class _RunStateRecorder:
 
 
 class AutonomousEngineeringLoop:
-    """Phase 10 objective → context → plan → intent → policy → execution → verification loop."""
-
     VERSION = "autonomous-engineering-loop-v1"
 
     def __init__(self, *, run_manager, state_store: StateStore, event_store: EventStore, context_engine: ContextEngine, controller: Controller, policy: PolicyEvaluator, broker: ExecutionBroker, verifier: IndependentVerifier, reasoning: ReasoningProvider, acceptance, verification_plan: FrozenVerificationPlan, verification_environment: VerificationEnvironment, workspace: WorkspaceRuntime, budget, bounded_autonomy: BoundedAutonomy | None = None, observer=None, max_cycles: int = 32, lease_ttl_seconds: int = 300) -> None:
@@ -131,6 +127,8 @@ class AutonomousEngineeringLoop:
                 return LoopResult(run_id, LoopPhase.COMPLETE, cycle, True, False, False, "run already complete", tuple(self._progress))
             if run.state in {RunState.ABORTED, RunState.EXPIRED}:
                 return LoopResult(run_id, LoopPhase.STOP, cycle, False, False, True, f"terminal state: {run.state.value}", tuple(self._progress))
+            if run.state is RunState.PAUSED:
+                return LoopResult(run_id, LoopPhase.STOP, cycle, False, False, False, "run paused by human control", tuple(self._progress))
             if run.state is RunState.WAITING_HUMAN:
                 return LoopResult(run_id, LoopPhase.WAIT_HUMAN, cycle, False, True, False, "human authority required", tuple(self._progress))
 
@@ -194,7 +192,7 @@ class AutonomousEngineeringLoop:
                     return LoopResult(run_id, LoopPhase.COMPLETE, cycle, True, False, False, "objective satisfied and promoted", tuple(self._progress))
                 self.run_manager.transition(run_id, RunState.WAITING_HUMAN, TransitionActor.CONTROLLER, reason="promotion policy requires human authority")
                 return LoopResult(run_id, LoopPhase.WAIT_HUMAN, cycle, False, True, False, "promotion requires human authority", tuple(self._progress))
-            if run.state in {RunState.FAILED, RunState.PAUSED}:
+            if run.state is RunState.FAILED:
                 self.run_manager.recover_run(run_id)
                 continue
         run = self.run_manager.get_run(run_id)
@@ -357,12 +355,7 @@ def _digest(value: str) -> str:
 
 
 def _git_output(operation: str, workspace: Path) -> str:
-    if operation == "diff":
-        command = ("git", "diff", "--binary")
-    elif operation == "rev":
-        command = ("git", "rev-parse", "HEAD")
-    else:
-        command = ("git", "status", "--porcelain", "--untracked-files=all")
+    command = ("git", "diff", "--binary") if operation == "diff" else ("git", "rev-parse", "HEAD") if operation == "rev" else ("git", "status", "--porcelain", "--untracked-files=all")
     completed = subprocess.run(command, cwd=workspace, capture_output=True, text=True, check=False)
     return (completed.stdout + completed.stderr).replace("\x00", "")
 
