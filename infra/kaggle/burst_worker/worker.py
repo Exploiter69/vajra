@@ -98,7 +98,7 @@ def main() -> int:
         }
 
     envelope = {
-        "protocol_version": adapter.protocol_version,
+        "protocol_version": PROTOCOL,
         "type": "worker_result",
         "result": result,
     }
