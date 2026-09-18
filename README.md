@@ -6,7 +6,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 15 — Production Hardening: IMPLEMENTED / GATE PENDING.**
+**Phase 16 — Advanced Autonomy: IMPLEMENTED / GATE PENDING.**
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior. Phase 12 added capability-aware model/worker routing. Phase 13 added the always-on control plane. Phase 14 adds provenance-bound memory without making history authoritative.
 
@@ -37,7 +37,7 @@ Useful bounded context is retained with repository revision, context digest, ite
 
 Current repository and verification truth outrank historical memory. Corrections are append-only records linked with supersedes; normal queries hide superseded history while preserving it for audit.
 
-**Phase 15 gate:** PENDING final local validation.
+**Phase 15 gate:** CLOSED — final local gate passed (9 hardening tests; 652 portable-suite tests with 4 gVisor tests deselected; compile and diff checks passed).
 
 Phase 14 deliberately does not introduce a vector database, embeddings, autonomous memory rewriting, model-controlled memory authority, or paid infrastructure.
 
@@ -95,7 +95,21 @@ Phase 11 validates unattended durability under failure with kill/recovery harnes
 - docs/PHASE_14_GATE_RESULT.md — Phase 14 gate closure record
 - docs/PHASE_15_IMPLEMENTATION.md — Phase 15 implementation and roadmap mapping
 - docs/PHASE_15_GATE_RESULT.md — Phase 15 gate result
+- docs/PHASE_16_IMPLEMENTATION.md — Phase 16 implementation and roadmap mapping
+- docs/PHASE_16_GATE_RESULT.md — Phase 16 gate result
 
 ## Frozen Baseline
 
 v0.1.0 / fb3cca5 remains the immutable Phase 6 baseline. Later work proceeds on main without rewriting or retagging that baseline.
+
+
+## Phase 16 implementation
+
+Phase 16 implements the roadmap's complete Advanced Autonomy scope:
+
+- **16A — Multi-step engineering:** dependency-validated stage DAGs covering architecture inspection through design, implementation/configuration, tests, integration, security, documentation, and final verification.
+- **16B — Multi-repository:** explicit repository/workspace/base-revision authority and cross-repository operation identities; repository scope cannot silently expand.
+- **16C — Specialized workers:** deterministic coding/testing/security/research/documentation role selection without a default multi-agent swarm.
+- **16D — Complex / long-horizon objectives:** durable append-only stage checkpoints, resumable progress, independent stage verification, and hard stage/replan/attempt/wall-clock bounds.
+
+The advanced layer coordinates work but does not replace Policy, Execution Broker, sandbox/workspace isolation, leases/fencing, independent Verification, or canonical Run state. No paid dependency or self-modification authority is introduced.
