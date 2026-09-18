@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Iterable
 
-from .contracts import AuditRecord
+from .contracts import AuditEventType, AuditRecord
 
 
 class AuditStore:
@@ -59,6 +59,36 @@ class AuditStore:
                 self._records.append(record)
 
 
+
+class AuditLoopObserver:
+    """Bridges autonomous loop observations into the hardening audit journal."""
+
+    def __init__(self, store: AuditStore, *, clock=None) -> None:
+        self.store = store
+        self._clock = clock
+
+    def observe(self, *, phase, run_id: str, payload: dict[str, object]) -> None:
+        from datetime import datetime, timezone
+        timestamp = self._clock() if self._clock is not None else datetime.now(timezone.utc)
+        event_type = AuditEventType.VERIFICATION if phase.value == "VERIFY" else AuditEventType.EXECUTION
+        index = len(self.store.list_for_run(run_id))
+        record = AuditRecord(
+            audit_id=f"{run_id}:{phase.value}:{index}",
+            event_type=event_type,
+            timestamp=timestamp.isoformat(),
+            run_id=run_id,
+            step_id=str(payload["step_id"]) if payload.get("step_id") else None,
+            attempt_id=str(payload["attempt_id"]) if payload.get("attempt_id") else None,
+            worker_id=str(payload["worker_id"]) if payload.get("worker_id") else None,
+            model_id=str(payload["model_id"]) if payload.get("model_id") else None,
+            operation=str(payload["operation"]) if payload.get("operation") else None,
+            outcome=str(payload.get("outcome", "")),
+            reason=str(payload.get("reason", "")),
+            payload={"phase": phase.value, **payload},
+        )
+        self.store.append(record)
+
+
 class Observability:
     """Queryable view over durable audit events, without owning Run state."""
 
@@ -86,4 +116,4 @@ class Observability:
         }
 
 
-__all__ = ["AuditStore", "Observability"]
+__all__ = ["AuditLoopObserver", "AuditStore", "Observability"]
