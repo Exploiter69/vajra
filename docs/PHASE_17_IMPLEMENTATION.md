@@ -12,7 +12,7 @@ Self-improvement is a proposal-and-promotion workflow, not autonomous mutation.
 
 Policy authority, security boundary, sandbox primitives, verification authority, worker fencing, canonical state, human override, audit/event integrity, Execution Broker boundary, autonomy/control-plane authority, and the self-improvement guard itself are outside the self-improvement scope.
 
-A proposal touching a protected path is rejected before isolation or execution.
+A proposal touching a protected path is rejected before isolation or execution. Isolation also requires an authoritative changed-path inspection of base revision versus proposed revision; declared paths must exactly match the inspected revision.
 
 ## Lifecycle
 
