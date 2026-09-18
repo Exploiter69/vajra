@@ -2,8 +2,8 @@
 
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
-**Phase:** Phase 15 — Production Hardening  
-**Implementation status:** Phase 15 implemented / gate pending  
+**Phase:** Phase 16 — Advanced Autonomy  
+**Implementation status:** Phase 16 implemented / gate pending  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -91,7 +91,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 12 — Model + worker routing | COMPLETE / Gate PASSED | gateway, capability routing, switching/recovery, routing evidence, portable CI |
 | Phase 13 — Always-on control plane | COMPLETE / CLOSED | daemon, durable queue, human controls, scheduling, API |
 | Phase 14 — Engineering Memory | COMPLETE / CLOSED | failure, repository, context memory and conflict awareness |
-| Phase 15 — Production Hardening | IMPLEMENTED / GATE PENDING | security, resource controls, observability |
+| Phase 15 — Production Hardening | COMPLETE / CLOSED | security, resource controls, observability; final local gate passed |
 
 ---
 
@@ -311,7 +311,15 @@ No vector database, embeddings, autonomous memory rewriting, model-controlled me
 
 ---
 
-## 13. Current Limitations
+## 13. Phase 16 — Advanced Autonomy
+
+**Status: IMPLEMENTED / GATE PENDING**
+
+Phase 16 implements 16A–16D from the canonical roadmap. Multi-step engineering is represented as a dependency-validated stage graph; multi-repository work requires explicit repository authority; specialized workers are deterministic singular role resources rather than a default swarm; and long-horizon objectives use durable stage checkpoints plus hard bounds and resume behavior.
+
+The Phase 16 layer does not authorize execution, mutate canonical Run state directly, replace independent verification, or grant models authority. It composes the existing Policy → Broker → Sandbox/Workspace → Verification boundaries.
+
+## 14. Current Limitations
 
 1. Oracle-hosted infrastructure remains unproven because the project is constrained to ₹0.00/no paid infrastructure.
 2. Physical gVisor proof is environment-specific and is not reproduced by hosted CI.
@@ -322,7 +330,7 @@ These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requi
 
 ---
 
-## 14. Explicitly Deferred
+## 15. Explicitly Deferred
 
 Until a later roadmap phase or explicit design decision:
 
@@ -340,9 +348,9 @@ Until a later roadmap phase or explicit design decision:
 
 ---
 
-## 15. Next Phase Boundary
+## 16. Next Phase Boundary
 
-Phase 14 is complete and closed after the final local gate. The next roadmap boundary is **PHASE 15 — PRODUCTION HARDENING**.
+Phase 14 is complete and closed after the final local gate. The next roadmap boundary is **PHASE 16 — ADVANCED AUTONOMY**.
 
 The routing layer remains subordinate to the existing authority chain:
 
@@ -360,7 +368,7 @@ No routing layer may become an authority bypass.
 
 ---
 
-## 16. Frozen Baseline Rule
+## 17. Frozen Baseline Rule
 
 `v0.1.0` at commit `fb3cca5` is immutable.
 
