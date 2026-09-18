@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from threading import RLock
+from threading import RLock\nfrom time import monotonic
 from typing import Any, Callable
 
 from .contracts import EngineeringPlan
@@ -232,7 +232,7 @@ class AdvancedAutonomyEngine:
         if len(objective.stages) > self.limits.max_stages:
             raise AdvancedAutonomyError("objective exceeds maximum stage count")
 
-    def next_stages(self, objective: MultiStepObjective) -> tuple[AdvancedStage, ...]:
+    def authorize_operation(self, objective: MultiStepObjective, operation: CrossRepositoryOperation) -> None:\n        authorities = {r.repository_id: r for r in objective.repositories}\n        missing = set(operation.repository_ids) - set(authorities)\n        if missing:\n            raise AdvancedAutonomyError(f\"cross-repository operation names unauthorized repositories: {sorted(missing)}\")\n        if len(operation.repository_ids) > 1 and len(set(operation.repository_ids)) != len(operation.repository_ids):\n            raise AdvancedAutonomyError(\"cross-repository operation contains duplicate repository identities\")\n\n    def next_stages(self, objective: MultiStepObjective) -> tuple[AdvancedStage, ...]:
         self.validate(objective)
         checkpoints = {c.stage_id: c for c in self.store.latest(objective.objective_id)}
         completed = {sid for sid, c in checkpoints.items() if c.state is StageState.COMPLETE}
