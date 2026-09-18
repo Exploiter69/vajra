@@ -58,3 +58,5 @@ Promotion requires the proposal to be `AWAITING_HUMAN`, an explicit matching `Pr
 ## Validation
 
 `tests/self_improvement/test_phase17_self_improvement.py` covers durability, protected surfaces, unsafe paths, the complete lifecycle, test/verification/security failures, human-gate enforcement, duplicate promotion, rejection, and journal tampering.
+
+Final local gate evidence: **17 dedicated tests passed**, **678 portable-suite tests passed with 4 gVisor integration tests deselected**, Python compilation passed, and `git diff --check` passed. The final journal-contiguity fix was committed in `e9ed458`.
