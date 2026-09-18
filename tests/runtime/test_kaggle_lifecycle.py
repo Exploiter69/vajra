@@ -76,3 +76,41 @@ def test_kaggle_launcher_reports_cli_failure(monkeypatch, tmp_path) -> None:
 
     with pytest.raises(KaggleLifecycleError, match="CLI not found"):
         KaggleKernelLauncher(tmp_path / "kernel").start()
+
+
+def test_kaggle_managed_provider_composes_launcher_and_http_readiness(monkeypatch):
+    from vajra.runtime.kaggle_lifecycle import KaggleManagedWorkerProvider
+    from vajra.runtime.worker_provider import WorkerEndpoint
+
+    endpoint = WorkerEndpoint(
+        infer_url="http://worker/infer",
+        health_url="http://worker/health",
+        worker_id="kaggle-worker",
+        protocol="vajra-worker-v1",
+        model="qwen2.5-coder:32b",
+        capabilities=("completion",),
+    )
+    calls = []
+
+    class Provider:
+        def ensure_ready(self):
+            calls.append("ready")
+            return endpoint
+
+    class Launcher:
+        def start(self):
+            calls.append("start")
+
+        def stop(self):
+            calls.append("stop")
+
+    managed = KaggleManagedWorkerProvider(
+        Launcher(),
+        Provider(),
+        readiness_timeout_seconds=0.1,
+        poll_interval_seconds=0.001,
+    )
+    assert managed.endpoint() == endpoint
+    assert calls == ["start", "ready"]
+    managed.release()
+    assert calls == ["start", "ready", "stop"]
