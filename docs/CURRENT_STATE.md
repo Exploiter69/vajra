@@ -90,7 +90,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 11 — Long-run durability + chaos | COMPLETE / Gate PASSED | kill harness, divergence, retry storm, lease chaos, soak runner and portable CI |
 | Phase 12 — Model + worker routing | COMPLETE / Gate PASSED | gateway, capability routing, switching/recovery, routing evidence, portable CI |
 | Phase 13 — Always-on control plane | COMPLETE / CLOSED | daemon, durable queue, human controls, scheduling, API |
-| Phase 14 — Engineering Memory | IMPLEMENTED / GATE PENDING | failure, repository, context memory and conflict awareness |
+| Phase 14 — Engineering Memory | COMPLETE / CLOSED | failure, repository, context memory and conflict awareness |
 
 ---
 
@@ -276,7 +276,7 @@ The control plane does not own canonical Run state, execute model/worker work it
 - Kaggle remains an ephemeral worker, never canonical state.
 - No paid inference or infrastructure was introduced.
 - Phase 13 now provides the always-on control plane.
-- No Engineering Memory was introduced; that is Phase 14.
+- Phase 14 Engineering Memory is now complete and closed.
 
 ---
 
@@ -341,7 +341,7 @@ Until a later roadmap phase or explicit design decision:
 
 ## 15. Next Phase Boundary
 
-Phase 14 is implemented and awaiting final local/remote gate verification. The next roadmap boundary is **PHASE 15 — PRODUCTION HARDENING**.
+Phase 14 is complete and closed after the final local gate. The next roadmap boundary is **PHASE 15 — PRODUCTION HARDENING**.
 
 The routing layer remains subordinate to the existing authority chain:
 
