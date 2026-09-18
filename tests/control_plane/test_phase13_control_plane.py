@@ -206,7 +206,13 @@ def test_localhost_api_is_control_surface_only(tmp_path: Path):
             assert response.status == 202
         assert manager.get_run("run-1").state is RunState.QUEUED
 
-        with urlopen(f"http://{server.host}:{server.port}/runs/run-1/pause", timeout=2) as response:
+        pause = Request(
+            f"http://{server.host}:{server.port}/runs/run-1/pause",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(pause, timeout=2) as response:
             payload = json.loads(response.read())
         assert payload["accepted"] is True
         assert manager.get_run("run-1").state is RunState.PAUSED
