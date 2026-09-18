@@ -12,7 +12,7 @@ from .store import MemoryStore
 
 def _id(kind: MemoryKind, content: Mapping[str, Any], *, identity: Mapping[str, Any]) -> str:
     raw = json.dumps({"kind": kind.value, "content": dict(content), "identity": dict(identity)}, sort_keys=True, separators=(",", ":"))
-    return f"mem-{sha256(raw.encode("utf-8")).hexdigest()[:24]}"
+    return f"mem-{sha256(raw.encode('utf-8')).hexdigest()[:24]}"
 
 
 @dataclass(frozen=True)
