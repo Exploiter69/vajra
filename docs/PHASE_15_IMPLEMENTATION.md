@@ -20,7 +20,7 @@ Implemented controls cover every roadmap security category:
 - network: network is disabled by default in the gVisor backend and the security policy rejects network-enabled execution unless explicitly permitted.
 - environment variables: only an explicit safe environment allowlist is accepted; secret-looking names are always rejected.
 - sandbox: gVisor remains the selected physical sandbox backend; Phase 15 adds security-policy checks plus runtime/output limits around it.
-- worker authentication: existing lease/attempt identity and stale-worker rejection remain authoritative; Phase 15 does not introduce a second authority path.
+- worker authentication: WorkerAuthenticator adds attempt-bound HMAC proofs with expiry; existing lease/attempt identity and stale-worker rejection remain authoritative.
 - result replay: existing attempt/correlation/lease fencing remains authoritative; audit identities are deterministic and duplicate-protected.
 - prompt injection: untrusted text can be classified and rejected when it contains common instruction-override indicators. This is a boundary detector, not a claim of perfect semantic detection.
 - malicious repositories: admission scans symlinks, submodules, sensitive paths, executable hooks, and package lifecycle scripts before worktree creation.
