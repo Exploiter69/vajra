@@ -52,6 +52,23 @@ class KaggleKernelLauncher:
             ]
         )
 
+    def output(self, destination: Path, *, force: bool = True) -> None:
+        """Download the latest saved kernel output without opening Kaggle UI."""
+        if not self.kernel_ref:
+            raise KaggleLifecycleError("kernel_ref is required for output")
+        destination.mkdir(parents=True, exist_ok=True)
+        command = [
+            self.executable,
+            "kernels",
+            "output",
+            self.kernel_ref,
+            "-p",
+            str(destination),
+        ]
+        if force:
+            command.append("--force")
+        self._run(command)
+
     def status(self) -> str:
         if not self.kernel_ref:
             raise KaggleLifecycleError("kernel_ref is required for status")
