@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
 import json
+from threading import RLock
 from typing import Any
 
 
@@ -64,8 +65,13 @@ class ResourceGovernor:
     def __init__(self, limits: ResourceLimits, usage: ResourceUsage | None = None) -> None:
         self.limits = limits
         self.usage = usage or ResourceUsage()
+        self._lock = RLock()
 
     def charge(self, **values: float | int) -> ResourceDecision:
+        with self._lock:
+            return self._charge_locked(**values)
+
+    def _charge_locked(self, **values: float | int) -> ResourceDecision:
         for name, value in values.items():
             if name not in self.usage.__dataclass_fields__:
                 return ResourceDecision(False, name, None, 0, f"unknown resource: {name}")
@@ -81,12 +87,13 @@ class ResourceGovernor:
         return ResourceDecision(True, None, None, 0, "resource charge accepted")
 
     def check(self) -> ResourceDecision:
-        for name in self.usage.__dataclass_fields__:
-            limit = getattr(self.limits, name)
-            observed = getattr(self.usage, name)
-            if limit is not None and observed > limit:
-                return ResourceDecision(False, name, limit, observed, f"{name} limit exceeded")
-        return ResourceDecision(True, None, None, 0, "resource usage within limits")
+        with self._lock:
+            for name in self.usage.__dataclass_fields__:
+                limit = getattr(self.limits, name)
+                observed = getattr(self.usage, name)
+                if limit is not None and observed > limit:
+                    return ResourceDecision(False, name, limit, observed, f"{name} limit exceeded")
+            return ResourceDecision(True, None, None, 0, "resource usage within limits")
 
 
 class AuditEventType(str, Enum):
