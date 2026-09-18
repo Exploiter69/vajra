@@ -2,9 +2,9 @@
 
 **Project:** VAJRA  
 **Document:** Post-Phase 6 Architecture, Safety Invariants, and Roadmap Specification  
-**Status:** Architecture freeze candidate — implementation begins only after the Phase 7 design gate passes  
+**Status:** Architecture baseline + roadmap specification; current implementation through Phase 17  
 **Supersedes for forward development:** `docs/VAJRA_v0_Technical_Specification.txt`  
-**Current implementation baseline:** Phase 6 complete; 419 tests passed at the audit checkpoint  
+**Current implementation baseline:** Phase 17 implemented and locally gated; Phases 6–16 are closed with repository-recorded evidence  
 **Primary constraint:** ₹0.00 operating cost
 
 ---
@@ -2253,27 +2253,33 @@ The durable runtime supplies survival.
 
 # 62. Current Position
 
+The roadmap defined by this document has been implemented through **Phase 17 — Controlled Self-Improvement**.
+
 ```text
-PHASE 6 — DURABLE SUBSTRATE
-████████████████████████████  COMPLETE
-
-PHASE 7 — AUTONOMOUS CONTROL FOUNDATION
-                            ← CURRENT
-
-PHASE 8 — CONTEXT ENGINE
-PHASE 9 — VERIFICATION + ANTI-GAMING
-PHASE 10 — AUTONOMOUS ENGINEERING LOOP
-PHASE 11 — CHAOS / LONG-RUN
-PHASE 12 — ROUTING
-PHASE 13 — ALWAYS-ON
-PHASE 14 — MEMORY
-PHASE 15 — HARDENING
-PHASE 16 — ADVANCED AUTONOMY
-PHASE 17 — CONTROLLED SELF-IMPROVEMENT
-PHASE 18+ — RESEARCH
+PHASE 6  — DURABLE SUBSTRATE                    COMPLETE / FROZEN
+PHASE 7  — SAFETY + AUTONOMOUS CONTROL          COMPLETE / GATE F PASSED
+PHASE 8  — CONTEXT + WORKSPACE                  COMPLETE
+PHASE 9  — VERIFICATION + ANTI-GAMING           COMPLETE / GATE PASSED
+PHASE 10 — REAL AUTONOMOUS ENGINEERING LOOP     COMPLETE / GATE PASSED
+PHASE 11 — LONG-RUN DURABILITY + CHAOS          COMPLETE / GATE PASSED
+PHASE 12 — MODEL + WORKER ROUTING               COMPLETE / GATE PASSED
+PHASE 13 — ALWAYS-ON CONTROL PLANE              COMPLETE / CLOSED
+PHASE 14 — ENGINEERING MEMORY                   COMPLETE / CLOSED
+PHASE 15 — PRODUCTION HARDENING                 COMPLETE / CLOSED
+PHASE 16 — ADVANCED AUTONOMY                    COMPLETE / CLOSED
+PHASE 17 — CONTROLLED SELF-IMPROVEMENT          COMPLETE / LOCAL GATE PASSED
+PHASE 18+ — RESEARCH / LONG HORIZON             NEXT ROADMAP BOUNDARY
 ```
 
-The next engineering action is to convert this specification into concrete Phase 7 contracts, validate them against the current implementation, and then implement 7A behind the Controller Safety Gate.
+Phase status is evidence-based and must not be inferred from the age of this specification. Detailed gate records and current-state documentation are the authoritative implementation-status record.
+
+Phase 8 is treated as complete because the later Phase 9 implementation record explicitly establishes **Phase 8 complete at 565 tests**; the original Phase 8 document's earlier "validation gate pending" wording is historical.
+
+Phase 15 is treated as complete because the repository records its final local gate as passed with 9 hardening tests, 652 portable-suite tests, compilation, and diff checks.
+
+Phase 17 is complete on the final local validation performed against `main`: 17 dedicated self-improvement tests passed, 678 portable tests passed with 4 gVisor integration tests deselected, compilation passed, and `git diff --check` passed. The journal-contiguity implementation fix was committed in `e9ed458`.
+
+Phase names are roadmap boundaries.
 
 ---
 
