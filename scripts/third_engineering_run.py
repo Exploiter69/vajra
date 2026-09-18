@@ -18,7 +18,7 @@ from vajra.execution.contracts import ExecutionResult, ExecutionStatus
 from vajra.policy.contracts import PolicyDecisionType
 from vajra.policy.evaluator import PolicyEvaluator, PolicyRule
 from vajra.routing.contracts import ModelIdentity
-from vajra.runtime.remote_model import build_remote_gateway
+from vajra.runtime.remote_model import build_remote_gateway, build_kaggle_batch_gateway
 from vajra.runtime.worker_provider import HTTPWorkerProvider, WorkerProviderError
 from vajra.runtime.remote_reasoner import GatewayReasoner
 from vajra.runtime.event_store import InMemoryEventStore
@@ -65,7 +65,7 @@ def prepare_workspace(workspace: Path) -> str:
     return git("rev-parse", "HEAD", cwd=workspace)
 
 
-def build_loop(workspace: Path, revision: str, endpoint: str, model_identity: ModelIdentity, run_id: str):
+def build_loop(workspace: Path, revision: str, gateway: object, model_identity: ModelIdentity, run_id: str):
     state, events = InMemoryStateStore(), InMemoryEventStore()
     manager = RunManager(state_store=state, event_store=events)
     objective = "Add multiply(a, b) to calculator.py and add a regression test proving multiply(6, 7) == 42."
@@ -93,8 +93,6 @@ def build_loop(workspace: Path, revision: str, endpoint: str, model_identity: Mo
     policy = PolicyEvaluator("vajra-run-3-policy", "1", (
         PolicyRule("write", "WRITE_FILE", PolicyDecisionType.ALLOW, "bounded project file change"),
         PolicyRule("promote", "PROMOTE_RUN", PolicyDecisionType.ALLOW, "independent tests passed")))
-    gateway = build_remote_gateway(endpoint, model_identity)
-
     loop = AutonomousEngineeringLoop(
         run_manager=manager, state_store=state, event_store=events, context_engine=ContextEngine(),
         controller=Controller(), policy=policy, broker=ExecutionBroker(ProjectFileBackend()),
@@ -115,34 +113,55 @@ def main() -> int:
     parser.add_argument("--workspace", type=Path, default=Path.home() / "vajra-run-3-project")
     parser.add_argument("--run-id", default="third-engineering-run")
     parser.add_argument("--endpoint", default=os.environ.get("VAJRA_KAGGLE_WORKER_URL", "http://127.0.0.1:8787/infer"))
+    parser.add_argument("--kaggle-batch", action="store_true", default=os.environ.get("VAJRA_KAGGLE_MODE") == "batch")
+    parser.add_argument("--kernel-template", type=Path, default=Path(os.environ.get("VAJRA_KAGGLE_KERNEL_TEMPLATE", "infra/kaggle/burst_worker")))
+    parser.add_argument("--kernel-ref", default=os.environ.get("VAJRA_KAGGLE_KERNEL_REF", ""))
     args = parser.parse_args()
 
     identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "http-worker")
-    provider = HTTPWorkerProvider(
-        infer_url=args.endpoint,
-        expected_model=identity.model,
-    )
-    try:
-        endpoint = provider.ensure_ready()
-    except WorkerProviderError as exc:
-        print(f"worker_not_ready: {exc}")
-        print("No project mutation or model call was attempted.")
-        print("Start the configured worker session and expose its /health, /capabilities, and /infer endpoints, then rerun.")
-        return 2
+    endpoint = None
+    if args.kaggle_batch:
+        template = args.kernel_template.expanduser().resolve()
+        if not template.is_dir():
+            print(f"worker_not_ready: Kaggle kernel template not found: {template}")
+            print("No project mutation or model call was attempted.")
+            return 2
+        if not args.kernel_ref.strip():
+            print("worker_not_ready: --kernel-ref or VAJRA_KAGGLE_KERNEL_REF is required for batch mode")
+            print("No project mutation or model call was attempted.")
+            return 2
+        gateway = build_kaggle_batch_gateway(template, args.kernel_ref)
+        mode = "kaggle-batch"
+    else:
+        provider = HTTPWorkerProvider(infer_url=args.endpoint, expected_model=identity.model)
+        try:
+            endpoint = provider.ensure_ready()
+        except WorkerProviderError as exc:
+            print(f"worker_not_ready: {exc}")
+            print("No project mutation or model call was attempted.")
+            print("Start the configured worker session and expose its /health, /capabilities, and /infer endpoints, then rerun.")
+            return 2
+        gateway = build_remote_gateway(endpoint.infer_url, identity)
+        mode = "http"
 
     workspace = args.workspace.expanduser().resolve()
     revision = prepare_workspace(workspace)
-    loop, manager = build_loop(workspace, revision, endpoint.infer_url, identity, args.run_id)
+    loop, manager = build_loop(workspace, revision, gateway, identity, args.run_id)
 
     print("=== VAJRA ENGINEERING RUN #3 ===")
     print(f"workspace: {workspace}")
     print(f"base_revision: {revision}")
     print(f"run_id: {args.run_id}")
     print(f"model: {identity.canonical}")
-    print(f"endpoint: {args.endpoint}")
-    print(f"worker: {endpoint.worker_id}")
-    print(f"protocol: {endpoint.protocol}")
-    print(f"capabilities: {', '.join(endpoint.capabilities) or 'none advertised'}")
+    print(f"mode: {mode}")
+    if endpoint is not None:
+        print(f"endpoint: {endpoint.infer_url}")
+        print(f"worker: {endpoint.worker_id}")
+        print(f"protocol: {endpoint.protocol}")
+        print(f"capabilities: {', '.join(endpoint.capabilities) or 'none advertised'}")
+    else:
+        print(f"kernel_ref: {args.kernel_ref}")
+
     print("authority: model proposes; VAJRA policy/broker/verifier decide")
     print()
     result = loop.run(args.run_id)
