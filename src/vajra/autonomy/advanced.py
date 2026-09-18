@@ -234,6 +234,178 @@ class AdvancedAutonomyEngine:
         if len(objective.stages) > self.limits.max_stages:
             raise AdvancedAutonomyError("objective exceeds maximum stage count")
 
+    def next_stages(self, objective: MultiStepObjective) -> tuple[AdvancedStage, ...]:
+        self.validate(objective)
+        completed = {
+            checkpoint.stage_id
+            for checkpoint in self.store.latest(objective.objective_id)
+            if checkpoint.state is StageState.COMPLETE
+        }
+        return tuple(
+            stage for stage in _topological_order(objective.stages)
+            if stage.stage_id not in completed
+            and set(stage.depends_on).issubset(completed)
+        )
+
+    def authorize_operation(
+        self,
+        objective: MultiStepObjective,
+        operation: CrossRepositoryOperation,
+    ) -> None:
+        self.validate(objective)
+        authorities = {repo.repository_id: repo for repo in objective.repositories}
+        requested_repositories = set(operation.repository_ids)
+        if len(requested_repositories) != len(operation.repository_ids):
+            raise AdvancedAutonomyError("cross-repository operation contains duplicate repositories")
+        if not requested_repositories.issubset(authorities):
+            raise AdvancedAutonomyError("cross-repository operation names unauthorized repositories")
+        unauthorized = {
+            repo_id
+            for repo_id in operation.repository_ids
+            if not operation.operations.issubset(authorities[repo_id].allowed_operations)
+        }
+        if unauthorized:
+            raise AdvancedAutonomyError(
+                f"unauthorized operations for repositories: {sorted(unauthorized)}"
+            )
+
+    def execute(
+        self,
+        objective: MultiStepObjective,
+        *,
+        execute_stage: Callable[[AdvancedStage, Any], Any],
+        verify_stage: Callable[[AdvancedStage, Any], tuple[bool, tuple[str, ...]]],
+        worker_registry: SpecializedWorkerRegistry | None = None,
+        worker_capabilities: frozenset[str] = frozenset(),
+    ) -> tuple[StageCheckpoint, ...]:
+        self.validate(objective)
+        started = monotonic()
+        attempts = 0
+        model_calls = 0
+        latest = {c.stage_id: c for c in self.store.latest(objective.objective_id)}
+        while True:
+            if monotonic() - started >= self.limits.max_wall_clock_seconds:
+                raise AdvancedAutonomyError("long-horizon wall-clock bound exceeded")
+            ready = self.next_stages(objective)
+            if not ready:
+                if len(latest) == len(objective.stages) and all(
+                    c.state is StageState.COMPLETE for c in latest.values()
+                ):
+                    return self.store.latest(objective.objective_id)
+                raise AdvancedAutonomyError("no ready stage; objective is blocked")
+            for stage in ready:
+                attempts += 1
+                if attempts > self.limits.max_attempts:
+                    raise AdvancedAutonomyError("long-horizon attempt bound exceeded")
+                worker = None
+                if len(stage.worker_roles) > 1:
+                    raise AdvancedAutonomyError(
+                        f"stage {stage.stage_id} requires multiple worker roles"
+                    )
+                if stage.worker_roles:
+                    if worker_registry is None:
+                        raise AdvancedAutonomyError(
+                            f"stage {stage.stage_id} requires a specialized worker"
+                        )
+                    worker = worker_registry.select(stage.worker_roles[0], worker_capabilities)
+                running = _checkpoint(
+                    objective.objective_id, stage, StageState.RUNNING,
+                    _next_sequence(latest), worker
+                )
+                self.store.record(running)
+                latest[stage.stage_id] = running
+                try:
+                    result = execute_stage(stage, worker)
+                    model_calls += 1
+                    if model_calls > self.limits.max_model_calls:
+                        raise AdvancedAutonomyError("long-horizon model-call bound exceeded")
+                    verifying = _checkpoint(
+                        objective.objective_id, stage, StageState.VERIFYING,
+                        _next_sequence(latest), worker
+                    )
+                    self.store.record(verifying)
+                    latest[stage.stage_id] = verifying
+                    verified, evidence = verify_stage(stage, result)
+                    if not verified or not evidence:
+                        failed = _checkpoint(
+                            objective.objective_id, stage, StageState.FAILED,
+                            _next_sequence(latest), worker,
+                            reason="independent verification failed",
+                        )
+                        self.store.record(failed)
+                        latest[stage.stage_id] = failed
+                        raise AdvancedAutonomyError(
+                            f"stage {stage.stage_id} verification failed"
+                        )
+                    complete = _checkpoint(
+                        objective.objective_id, stage, StageState.COMPLETE,
+                        _next_sequence(latest), worker,
+                        evidence_refs=tuple(evidence),
+                    )
+                    self.store.record(complete)
+                    latest[stage.stage_id] = complete
+                except AdvancedAutonomyError:
+                    raise
+                except Exception as exc:
+                    failed = _checkpoint(
+                        objective.objective_id, stage, StageState.FAILED,
+                        _next_sequence(latest), worker,
+                        reason=f"execution failed: {exc}",
+                    )
+                    self.store.record(failed)
+                    latest[stage.stage_id] = failed
+                    raise AdvancedAutonomyError(
+                        f"stage {stage.stage_id} execution failed"
+                    ) from exc
+            if len(latest) == len(objective.stages) and all(
+                c.state is StageState.COMPLETE for c in latest.values()
+            ):
+                return self.store.latest(objective.objective_id)
+
+
+def _topological_order(stages: tuple[AdvancedStage, ...]) -> tuple[AdvancedStage, ...]:
+    by_id = {stage.stage_id: stage for stage in stages}
+    remaining = set(by_id)
+    completed: set[str] = set()
+    ordered: list[AdvancedStage] = []
+    while remaining:
+        ready = sorted(
+            (sid for sid in remaining if set(by_id[sid].depends_on).issubset(completed)),
+            key=str,
+        )
+        if not ready:
+            raise AdvancedAutonomyError("stage dependency graph contains a cycle")
+        for sid in ready:
+            ordered.append(by_id[sid])
+            completed.add(sid)
+            remaining.remove(sid)
+    return tuple(ordered)
+
+
+def _next_sequence(latest: dict[str, StageCheckpoint]) -> int:
+    return max((checkpoint.sequence for checkpoint in latest.values()), default=0) + 1
+
+
+def _checkpoint(
+    objective_id: str,
+    stage: AdvancedStage,
+    state: StageState,
+    sequence: int,
+    worker: SpecializedWorker | None,
+    *,
+    evidence_refs: tuple[str, ...] = (),
+    reason: str = "",
+) -> StageCheckpoint:
+    return StageCheckpoint(
+        objective_id=objective_id,
+        stage_id=stage.stage_id,
+        state=state,
+        sequence=sequence,
+        recorded_at=datetime.now(timezone.utc).isoformat(),
+        evidence_refs=evidence_refs,
+        worker_id=worker.worker_id if worker else None,
+        reason=reason,
+    )
 
 def _validate_dag(stages: tuple[AdvancedStage, ...]) -> None:
     ids = [stage.stage_id for stage in stages]
