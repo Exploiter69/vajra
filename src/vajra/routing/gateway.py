@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from .contracts import ModelRequest, ModelResult
+from vajra.hardening import ResourceGovernor
 
 
 class ModelGatewayError(RuntimeError):
@@ -66,8 +67,9 @@ class ModelGateway:
 
     VERSION = "model-gateway-v1"
 
-    def __init__(self, registry: ModelRegistry) -> None:
+    def __init__(self, registry: ModelRegistry, *, resource_governor: ResourceGovernor | None = None) -> None:
         self._registry = registry
+        self._resource_governor = resource_governor
 
     def invoke(self, request: ModelRequest, model_identity: str | None = None) -> ModelResult:
         if model_identity is None:
@@ -91,6 +93,14 @@ class ModelGateway:
             )
         if result.model_identity is None:
             raise ModelGatewayError("adapter returned a result without model identity")
+        if self._resource_governor is not None:
+            decision = self._resource_governor.charge(
+                model_calls=result.usage.model_calls,
+                output_bytes=result.usage.output_tokens,
+                worker_runtime_seconds=result.usage.runtime_seconds,
+            )
+            if not decision.allowed:
+                raise ModelGatewayError(decision.reason)
         if result.model_identity.canonical != model_identity:
             raise ModelGatewayError("adapter result identity does not match selected model")
         return result
