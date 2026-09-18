@@ -3,7 +3,7 @@
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
 **Phase:** Phase 14 — Engineering Memory complete  
-**Implementation status:** Phase 14 implemented / gate pending  
+**Implementation status:** Phase 14 complete / closed  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -304,7 +304,7 @@ Current repository and verification truth outrank memory. Explicit MemoryConflic
 
 ### Phase 14 validation
 
-The Phase 14 workflow runs dedicated memory tests, the portable full suite, compilation, and git diff checking. Memory tests cover persistence/reload, provenance enforcement, repository/context staleness, deterministic querying, supersession, identity separation, and journal tamper detection.
+The final Phase 14 local gate passed: 8 dedicated memory tests, 643 portable-suite tests with 4 gVisor tests deselected, compilation, and git diff checks. Memory tests cover persistence/reload, provenance enforcement, repository/context staleness, deterministic querying, supersession, identity separation, and journal tamper detection. The GitHub Actions workflow remains configured for equivalent validation; its final push-triggered hosted result was not independently observable through the available connector.
 
 No vector database, embeddings, autonomous memory rewriting, model-controlled memory authority, or paid infrastructure was introduced.
 
