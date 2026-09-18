@@ -121,3 +121,22 @@ def test_cross_repository_operation_must_be_authorized_per_repository(tmp_path: 
     engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "authority.jsonl"))
     with pytest.raises(AdvancedAutonomyError, match="unauthorized operations"):
         engine.authorize_operation(objective, CrossRepositoryOperation("op", "intent", ("a", "b"), "bad scope", frozenset({"modify"})))
+
+
+def test_execution_uses_dependency_order_even_when_declared_out_of_order(tmp_path: Path):
+    objective = MultiStepObjective(
+        "ordered", "ordered work",
+        (
+            AdvancedStage("b", "B", "second", depends_on=("a",)),
+            AdvancedStage("a", "A", "first"),
+        ),
+        (repo("r"),),
+    )
+    engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "ordered.jsonl"))
+    seen = []
+    engine.execute(
+        objective,
+        execute_stage=lambda stage, worker: seen.append(stage.stage_id) or stage.stage_id,
+        verify_stage=lambda stage, result: (True, (f"e-{stage.stage_id}",)),
+    )
+    assert seen == ["a", "b"]
