@@ -18,13 +18,17 @@ class AuditStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = RLock()
         self._records: list[AuditRecord] = []
+        self._ids: set[str] = set()
         self._load()
 
     def append(self, record: AuditRecord) -> AuditRecord:
         with self._lock:
             record = record.with_digest()
-            if self._records and record.audit_id == self._records[-1].audit_id:
-                return record
+            if record.audit_id in self._ids:
+                existing = next(r for r in self._records if r.audit_id == record.audit_id)
+                if existing.record_digest == record.record_digest:
+                    return existing
+                raise ValueError(f"audit id already exists with different content: {record.audit_id}")
             payload = asdict(record)
             payload["event_type"] = record.event_type.value
             with self.path.open("a", encoding="utf-8") as handle:
@@ -32,6 +36,7 @@ class AuditStore:
                 handle.flush()
                 os.fsync(handle.fileno())
             self._records.append(record)
+            self._ids.add(record.audit_id)
             return record
 
     def list_for_run(self, run_id: str) -> tuple[AuditRecord, ...]:
