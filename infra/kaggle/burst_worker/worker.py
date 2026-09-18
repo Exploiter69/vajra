@@ -21,21 +21,59 @@ def run(command: tuple[str, ...]) -> None:
     subprocess.run(command, check=True, text=True)
 
 
-def ensure_ollama() -> None:
-    if subprocess.run(("bash", "-lc", "command -v ollama"), capture_output=True).returncode != 0:
-        run(("bash", "-lc", "curl -fsSL https://ollama.com/install.sh | sh"))
+def _ollama_executable() -> str | None:
+    for candidate in (
+        "ollama",
+        "/usr/local/bin/ollama",
+        "/usr/bin/ollama",
+        "/opt/ollama/bin/ollama",
+        str(ROOT / "ollama" / "bin" / "ollama"),
+    ):
+        probe = subprocess.run(
+            ("bash", "-lc", f"command -v {candidate}" if candidate == "ollama" else f"test -x {candidate}"),
+            capture_output=True,
+            text=True,
+        )
+        if probe.returncode == 0:
+            return candidate if candidate != "ollama" else probe.stdout.strip()
+    return None
 
-    probe = subprocess.run(("bash", "-lc", "ollama list"), capture_output=True, text=True)
+
+def _install_ollama_user_local() -> str:
+    target = ROOT / "ollama"
+    archive = ROOT / "ollama-linux-amd64.tar.zst"
+    target.mkdir(parents=True, exist_ok=True)
+    run(
+        (
+            "bash",
+            "-lc",
+            "curl -fL https://ollama.com/download/ollama-linux-amd64.tar.zst "
+            f"-o {archive}",
+        )
+    )
+    run(("tar", "--zstd", "-xf", str(archive), "-C", str(target)))
+    executable = target / "bin" / "ollama"
+    if not executable.is_file():
+        raise RuntimeError(f"Ollama archive did not contain {executable}")
+    return str(executable)
+
+
+def ensure_ollama() -> None:
+    ollama = _ollama_executable()
+    if ollama is None:
+        ollama = _install_ollama_user_local()
+
+    probe = subprocess.run((ollama, "list"), capture_output=True, text=True)
     if probe.returncode != 0:
         subprocess.Popen(
-            ("ollama", "serve"),
+            (ollama, "serve"),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
         deadline = time.monotonic() + 30
         while time.monotonic() < deadline:
             if subprocess.run(
-                ("bash", "-lc", "ollama list"), capture_output=True
+                (ollama, "list"), capture_output=True
             ).returncode == 0:
                 break
             time.sleep(1)
@@ -43,10 +81,10 @@ def ensure_ollama() -> None:
             raise RuntimeError("Ollama did not become ready")
 
     listing = subprocess.run(
-        ("ollama", "list"), capture_output=True, text=True, check=True
+        (ollama, "list"), capture_output=True, text=True, check=True
     ).stdout
     if MODEL not in listing:
-        run(("ollama", "pull", MODEL))
+        run((ollama, "pull", MODEL))
 
 
 def infer(prompt: str) -> tuple[str, dict]:
