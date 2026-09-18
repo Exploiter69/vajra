@@ -61,8 +61,10 @@ class AuditStore:
                     record = AuditRecord(**payload)
                 except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
                     raise ValueError(f"invalid audit record at line {line_no}") from exc
+                if record.audit_id in self._ids:
+                    raise ValueError(f"duplicate audit id at line {line_no}")
                 self._records.append(record)
-
+                self._ids.add(record.audit_id)
 
 
 class AuditLoopObserver:
