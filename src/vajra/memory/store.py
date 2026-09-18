@@ -40,7 +40,6 @@ class JsonlMemoryStore(MemoryStore):
                     continue
                 try:
                     payload = json.loads(line)
-                    MemoryRecord.from_payload(payload)
                     record = MemoryRecord.from_payload(payload)
                 except ValueError as exc:
                     if "digest mismatch" in str(exc):
