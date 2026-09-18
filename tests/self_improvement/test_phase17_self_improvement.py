@@ -176,6 +176,10 @@ def test_journal_tampering_is_detected(tmp_path: Path):
     path = tmp_path / "journal.jsonl"
     engine = SelfImprovementEngine(SelfImprovementStore(path))
     engine.propose(proposal())
-    path.write_text(path.read_text(encoding="utf-8") + '{" + "\"sequence\"" + ":99," + "\"proposal_id\"" + ":\"evil\"," + "\"state\"" + ":\"PROPOSED\"}\\n", encoding="utf-8")
+    path.write_text(
+        path.read_text(encoding="utf-8")
+        + '{"sequence":99,"proposal_id":"evil","state":"PROPOSED"}\n',
+        encoding="utf-8",
+    )
     with pytest.raises(SelfImprovementError, match="journal"):
         SelfImprovementStore(path)
