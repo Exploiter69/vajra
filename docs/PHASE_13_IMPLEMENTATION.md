@@ -1,6 +1,6 @@
 # Phase 13 — Always-On Control Plane
 
-**Status:** IMPLEMENTED / LOCAL GATE PENDING
+**Status:** COMPLETE / CLOSED
 
 This phase implements every Phase 13 subsection in the canonical roadmap:
 
@@ -31,5 +31,7 @@ The implementation uses only Python standard-library facilities. No paid service
 The Phase 13 test suite covers restart/recovery of dispatching queue entries; FIFO submission and durable completion; executor failure and requeue; pause/cancel/abort; active-run pause/resume; failed-run retry; approval/rejection; one-shot and periodic scheduling; daemon start/stop; and the localhost HTTP control surface.
 
 The Phase 13 workflow runs the Phase 13 suite, the portable full suite, compilation, and git diff checking.
+
+The corresponding gate closure is recorded in `docs/PHASE_13_GATE_RESULT.md` (GitHub Actions run `35300794216`).
 
 Phase 13 does not add Engineering Memory, production hardening, Kubernetes, multi-agent behavior, or a Telegram-specific runtime. Those remain later roadmap concerns.
