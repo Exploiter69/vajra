@@ -50,6 +50,15 @@ class KaggleBatchWorkerTransport:
         with tempfile.TemporaryDirectory(prefix="vajra-kaggle-") as temp:
             kernel_dir = Path(temp) / "kernel"
             shutil.copytree(self.kernel_template, kernel_dir)
+            metadata_path = kernel_dir / "kernel-metadata.json"
+            if not metadata_path.is_file():
+                raise KaggleBatchWorkerError("kernel template has no kernel-metadata.json")
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            metadata["id"] = self.kernel_ref
+            metadata_path.write_text(
+                json.dumps(metadata, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             (kernel_dir / "worker_job.json").write_text(
                 adapter.encode_job(job), encoding="utf-8"
             )
