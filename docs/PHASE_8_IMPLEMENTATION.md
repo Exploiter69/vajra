@@ -1,14 +1,15 @@
 # VAJRA Phase 8 — Engineering Context + Workspace
 
-**Status:** Implementation complete; executable validation gate pending
+**Status:** COMPLETE / VALIDATED
 **Baseline:** Phase 7 Gate F passed at `d2786be`
+**Closure evidence:** Phase 9 records Phase 8 complete at 565 tests
 **Operating-cost constraint:** ₹0.00
 
 ## Scope
 
 Phase 8 implements the bounded information/workspace substrate required by the Controller without enabling the autonomous engineering loop.
 
-The implementation follows the roadmap requirements:
+The implementation follows the roadmap requirements. The original pending-gate wording in this document is historical; the later Phase 9 closure record establishes Phase 8 as the completed baseline:
 
 1. operational Git worktree lifecycle;
 2. deterministic `ContextBundle` construction;
