@@ -1,9 +1,9 @@
-from .audit import AuditStore, Observability
+from .audit import AuditLoopObserver, AuditStore, Observability
 from .contracts import AuditEventType, AuditRecord, HardeningViolation, ResourceDecision, ResourceGovernor, ResourceLimits, ResourceUsage
 from .security import SecurityPolicy
 
 __all__ = [
-    "AuditEventType", "AuditRecord", "AuditStore", "HardeningViolation",
+    "AuditEventType", "AuditLoopObserver", "AuditRecord", "AuditStore", "HardeningViolation",
     "Observability", "ResourceDecision", "ResourceGovernor", "ResourceLimits",
     "ResourceUsage", "SecurityPolicy",
 ]
