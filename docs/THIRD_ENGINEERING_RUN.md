@@ -66,6 +66,39 @@ This is the simplest fully controlled provider.
 
 ### Kaggle burst worker
 
+A Kaggle runtime can also be operated headlessly through the Kaggle CLI: VAJRA
+can push a kernel, poll its run status, and download its saved output without
+opening the Kaggle web UI. Kaggle documents `kernels push`, `kernels status`,
+and `kernels output` as CLI operations.
+
+This gives VAJRA a valid **batch/burst** execution mode, but it is not an
+always-on HTTP worker. A batch kernel produces its version/output after the run,
+whereas the HTTP architecture requires a live externally reachable `/infer`
+endpoint. Kaggle's documented notebook environment does not provide a generic
+public inbound port contract for a notebook runtime.
+
+### Public tunnel option
+
+A temporary Cloudflare Quick Tunnel can expose a local HTTP service without a
+Cloudflare account or custom domain. It provides a random `trycloudflare.com`
+hostname and is explicitly intended for testing/development rather than
+production.
+
+However, putting such a tunnel inside Kaggle still leaves a discovery problem:
+the random public URL has to be communicated back to VAJRA. Kaggle CLI's output
+mechanism retrieves saved kernel output, not a guaranteed live control channel.
+Therefore VAJRA will **not** silently treat Quick Tunnel output as an automatic
+always-on provider.
+
+The architectural decision is therefore:
+
+- **Kaggle CLI batch**: fully headless and zero-cost-compatible; suitable for
+  bounded burst jobs.
+- **Kaggle + externally exposed HTTP worker**: supported only when a real,
+  reachable endpoint is supplied and readiness passes.
+- **Kaggle browser tab automation**: not part of VAJRA core.
+
+
 A Kaggle runtime can provide the validated Qwen/T4 inference capability when
 its worker endpoint is actually running and reachable. Run #3 accepts that
 endpoint only after the readiness gate passes.
