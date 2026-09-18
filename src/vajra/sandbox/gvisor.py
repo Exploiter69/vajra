@@ -168,7 +168,7 @@ class GVisorSandbox:
                 operation=operation,
                 output=output,
                 errors=(
-                    f"Process exited with return code {completed.returncode}",
+                    f"Process exited with return code {completed['return_code']}",
                 ),
             )
 
@@ -243,9 +243,10 @@ class GVisorSandbox:
         }
 
     @staticmethod
-    def _rejected(operation: str, error: str) -> ExecutionResult:
+    def _rejected(operation: str, error: str, output: dict[str, object] | None = None) -> ExecutionResult:
         return ExecutionResult(
             status=ExecutionStatus.REJECTED,
             operation=operation,
+            output=output or {},
             errors=(error,),
         )
