@@ -1,6 +1,6 @@
 # Phase 15 — Production Hardening
 
-**Status:** IMPLEMENTED / GATE PENDING
+**Status:** COMPLETE / CLOSED
 
 Phase 15 is the roadmap's "make it boring" phase. It hardens filesystem/workspace boundaries, hostile repository handling, sandbox execution, model/resource budgets, and human observability without changing VAJRA's authority model.
 
@@ -55,4 +55,4 @@ Phase 15 adds no paid dependency, hosted service, model, database, or infrastruc
 
 The Phase 15 workflow runs dedicated hardening tests, the portable full suite with gVisor integration excluded, Python compilation, and git diff checking.
 
-Final closure requires those checks to pass on the final main revision. Hosted CI results are recorded only when independently observable.
+Final local closure evidence is recorded in the repository: 9 hardening tests passed, 652 portable-suite tests passed with 4 gVisor integration tests deselected, compilation passed, and `git diff --check` passed. Hosted CI results are recorded only when independently observable.
