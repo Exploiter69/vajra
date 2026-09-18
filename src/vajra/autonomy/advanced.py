@@ -10,8 +10,6 @@ from threading import RLock
 from time import monotonic\nfrom time import monotonic
 from typing import Any, Callable
 
-from .contracts import EngineeringPlan
-
 
 class AdvancedAutonomyError(RuntimeError):
     pass
