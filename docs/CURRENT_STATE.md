@@ -2,8 +2,8 @@
 
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
-**Phase:** Phase 16 — Advanced Autonomy  
-**Implementation status:** Phase 16 implemented / gate pending  
+**Phase:** Phase 17 — Controlled Self-Improvement  
+**Implementation status:** Phase 17 implemented / gate pending  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -92,6 +92,8 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 13 — Always-on control plane | COMPLETE / CLOSED | daemon, durable queue, human controls, scheduling, API |
 | Phase 14 — Engineering Memory | COMPLETE / CLOSED | failure, repository, context memory and conflict awareness |
 | Phase 15 — Production Hardening | COMPLETE / CLOSED | security, resource controls, observability; final local gate passed |
+| Phase 16 — Advanced Autonomy | COMPLETE / CLOSED | multi-step, multi-repository, specialized workers, durable long-horizon bounds; 9 dedicated tests and 661 portable-suite tests passed |
+| Phase 17 — Controlled Self-Improvement | IMPLEMENTED / Gate PENDING | bounded improvement proposals, protected authority surfaces, isolated verification/security gates, explicit human promotion, durable journal |
 
 ---
 
@@ -366,6 +368,16 @@ Model proposes
 No routing layer may become an authority bypass.
 
 ---
+
+## 16. Phase 17 — Controlled Self-Improvement
+
+**Status: IMPLEMENTED / GATE PENDING**
+
+Phase 17 implements the roadmap's complete self-improvement scope. Eligible improvements are limited to routing heuristics, recovery heuristics, context ranking, failure classification, memory strategies, scheduling heuristics, and worker selection.
+
+Protected forever: Policy authority, security boundary, sandbox primitives, verification authority, worker fencing, canonical state, human override, audit/event integrity, Execution Broker boundary, autonomy/control-plane authority, and the self-improvement guard itself.
+
+The lifecycle is proposal → isolated branch → tests → independent verification → security verification → human approval → promotion. The model may propose a change but cannot manufacture approval, promote it, alter protected authority, or restart itself.
 
 ## 17. Frozen Baseline Rule
 
