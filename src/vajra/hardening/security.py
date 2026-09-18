@@ -4,6 +4,8 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
+import subprocess
 from typing import Mapping, Sequence
 
 from .contracts import HardeningViolation
@@ -91,7 +93,7 @@ class SecurityPolicy:
         root_path = self.validate_workspace(root)
         findings: list[str] = []
         for current, dirs, files in os.walk(root_path, followlinks=False):
-            dirs[:] = sorted(dirs)
+            dirs[:] = sorted(d for d in dirs if d != ".git")
             for name in sorted(files):
                 path = Path(current) / name
                 rel = path.relative_to(root_path).as_posix()
@@ -99,9 +101,6 @@ class SecurityPolicy:
                     findings.append(f"SYMLINK:{rel}")
                 if rel == ".gitmodules" and not self.allow_submodules:
                     findings.append("SUBMODULE:.gitmodules")
-                if rel == ".git/hooks" or rel.startswith(".git/hooks/"):
-                    if not self.allow_git_hooks:
-                        findings.append(f"GIT_HOOK:{rel}")
                 if _SENSITIVE_PATH.search(rel):
                     findings.append(f"CREDENTIAL_PATH:{rel}")
                 if path.name == "package.json" and not self.allow_package_scripts:
@@ -113,7 +112,37 @@ class SecurityPolicy:
                             findings.append(f"PACKAGE_LIFECYCLE:{rel}:{','.join(bad)}")
                     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
                         findings.append(f"INVALID_PACKAGE_MANIFEST:{rel}")
-        return tuple(findings)
+
+        if not self.allow_git_hooks:
+            try:
+                git_dir = Path(subprocess.check_output(
+                    ["git", "-C", str(root_path), "rev-parse", "--git-dir"],
+                    text=True, stderr=subprocess.DEVNULL,
+                ).strip())
+                if not git_dir.is_absolute():
+                    git_dir = (root_path / git_dir).resolve()
+                hooks_dir = git_dir / "hooks"
+                if hooks_dir.is_dir():
+                    for hook in sorted(hooks_dir.iterdir()):
+                        if hook.name.endswith(".sample"):
+                            continue
+                        try:
+                            mode = hook.stat().st_mode
+                        except OSError:
+                            findings.append(f"GIT_HOOK_UNREADABLE:{hook.name}")
+                            continue
+                        if mode & (stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH):
+                            findings.append(f"GIT_HOOK:{hook.name}")
+            except (OSError, subprocess.CalledProcessError):
+                pass
+        return tuple(sorted(set(findings)))
+
+    def assert_repository_safe(self, root: str | Path) -> Path:
+        root_path = self.validate_workspace(root)
+        findings = self.scan_repository(root_path)
+        if findings:
+            raise HardeningViolation("repository rejected by security policy: " + "; ".join(findings))
+        return root_path
 
     @staticmethod
     def inspect_untrusted_text(text: str) -> tuple[str, ...]:
