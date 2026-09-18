@@ -7,14 +7,13 @@ import time
 from pathlib import Path
 from urllib.request import Request, urlopen
 
-from vajra.runtime.kaggle_worker import KaggleWorkerAdapter
-
 
 ROOT = Path("/kaggle/working")
 JOB_PATH = ROOT / "worker_job.json"
 RESULT_PATH = ROOT / "worker_result.json"
 MODEL = os.environ.get("VAJRA_MODEL", "qwen2.5-coder:32b")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
+PROTOCOL = "vajra-worker-v1"
 
 
 def run(command: tuple[str, ...]) -> None:
@@ -25,14 +24,22 @@ def ensure_ollama() -> None:
     if subprocess.run(("bash", "-lc", "command -v ollama"), capture_output=True).returncode != 0:
         run(("bash", "-lc", "curl -fsSL https://ollama.com/install.sh | sh"))
 
-    probe = subprocess.run(
-        ("bash", "-lc", "ollama list"),
-        capture_output=True,
-        text=True,
-    )
+    probe = subprocess.run(("bash", "-lc", "ollama list"), capture_output=True, text=True)
     if probe.returncode != 0:
-        run(("ollama", "serve"))
-        time.sleep(3)
+        subprocess.Popen(
+            ("ollama", "serve"),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
+            if subprocess.run(
+                ("bash", "-lc", "ollama list"), capture_output=True
+            ).returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError("Ollama did not become ready")
 
     listing = subprocess.run(
         ("ollama", "list"), capture_output=True, text=True, check=True
@@ -43,12 +50,7 @@ def ensure_ollama() -> None:
 
 def infer(prompt: str) -> tuple[str, dict]:
     payload = json.dumps(
-        {
-            "model": MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "format": "json",
-        }
+        {"model": MODEL, "prompt": prompt, "stream": False, "format": "json"}
     ).encode("utf-8")
     request = Request(
         f"{OLLAMA_URL}/api/generate",
@@ -66,9 +68,14 @@ def infer(prompt: str) -> tuple[str, dict]:
 
 
 def main() -> int:
-    adapter = KaggleWorkerAdapter()
-    job = adapter.decode_job(JOB_PATH.read_text(encoding="utf-8"))
-    prompt = job.context_bundle.get("prompt")
+    payload = json.loads(JOB_PATH.read_text(encoding="utf-8"))
+    if payload.get("protocol_version") != PROTOCOL or payload.get("type") != "worker_job":
+        raise ValueError("unsupported worker job envelope")
+    job = payload.get("job")
+    if not isinstance(job, dict):
+        raise ValueError("worker job payload missing")
+
+    prompt = job.get("context_bundle", {}).get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("worker job has no prompt")
 
@@ -77,7 +84,7 @@ def main() -> int:
         response, usage = infer(prompt)
         result = {
             "status": "completed",
-            "correlation_id": job.correlation_id,
+            "correlation_id": job.get("correlation_id"),
             "structured_result": {"response": response},
             "artifacts": [],
             "logs": ["qwen inference completed through Ollama"],
@@ -88,7 +95,7 @@ def main() -> int:
     except Exception as exc:
         result = {
             "status": "failed",
-            "correlation_id": job.correlation_id,
+            "correlation_id": job.get("correlation_id"),
             "structured_result": {},
             "artifacts": [],
             "logs": [],
@@ -97,11 +104,7 @@ def main() -> int:
             "evidence_refs": [],
         }
 
-    envelope = {
-        "protocol_version": PROTOCOL,
-        "type": "worker_result",
-        "result": result,
-    }
+    envelope = {"protocol_version": PROTOCOL, "type": "worker_result", "result": result}
     RESULT_PATH.write_text(
         json.dumps(envelope, sort_keys=True, separators=(",", ":")),
         encoding="utf-8",
