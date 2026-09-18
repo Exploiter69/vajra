@@ -313,7 +313,17 @@ No vector database, embeddings, autonomous memory rewriting, model-controlled me
 
 ---
 
-## 13. Phase 16 — Advanced Autonomy
+## 13. Phase 15 — Production Hardening
+
+**Status: COMPLETE / CLOSED**
+
+Phase 15 implements the roadmap's production-hardening scope across filesystem, hostile-repository admission, credentials/environment isolation, Git hooks, submodules, package lifecycle scripts, network/sandbox restrictions, worker authentication, replay protection, prompt-injection boundary detection, resource controls, and durable audit observability.
+
+Final local evidence recorded in the repository: 9 hardening tests passed, 652 portable-suite tests passed with 4 gVisor integration tests deselected, compilation passed, and `git diff --check` passed. Physical gVisor integration remains environment-specific.
+
+---
+
+## 14. Phase 16 — Advanced Autonomy
 
 **Status: COMPLETE / CLOSED**
 
@@ -321,7 +331,7 @@ Phase 16 implements 16A–16D from the canonical roadmap. Multi-step engineering
 
 The Phase 16 layer does not authorize execution, mutate canonical Run state directly, replace independent verification, or grant models authority. It composes the existing Policy → Broker → Sandbox/Workspace → Verification boundaries.
 
-## 14. Current Limitations
+## 15. Current Limitations
 
 1. Oracle-hosted infrastructure remains unproven because the project is constrained to ₹0.00/no paid infrastructure.
 2. Physical gVisor proof is environment-specific and is not reproduced by hosted CI.
@@ -332,7 +342,7 @@ These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requi
 
 ---
 
-## 15. Explicitly Deferred
+## 16. Explicitly Deferred
 
 Until a later roadmap phase or explicit design decision:
 
@@ -349,7 +359,7 @@ Until a later roadmap phase or explicit design decision:
 
 ---
 
-## 16. Next Phase Boundary
+## 17. Next Phase Boundary
 
 Phases 15 and 16 are complete and closed. Phase 17 is also complete after its final local gate. The next roadmap boundary is **PHASE 18+ — RESEARCH / LONG HORIZON**.
 
@@ -369,15 +379,17 @@ No routing layer may become an authority bypass.
 
 ---
 
-## 16. Phase 17 — Controlled Self-Improvement
+## 18. Phase 17 — Controlled Self-Improvement
 
-**Status: IMPLEMENTED / GATE PENDING**
+**Status: COMPLETE / CLOSED / LOCAL GATE PASSED**
 
 Phase 17 implements the roadmap's complete self-improvement scope. Eligible improvements are limited to routing heuristics, recovery heuristics, context ranking, failure classification, memory strategies, scheduling heuristics, and worker selection.
 
 Protected forever: Policy authority, security boundary, sandbox primitives, verification authority, worker fencing, canonical state, human override, audit/event integrity, Execution Broker boundary, autonomy/control-plane authority, and the self-improvement guard itself.
 
 The lifecycle is proposal → isolated branch → tests → independent verification → security verification → human approval → promotion. The model may propose a change but cannot manufacture approval, promote it, alter protected authority, or restart itself.
+
+Final local gate evidence: 17 dedicated self-improvement tests passed; 678 portable-suite tests passed with 4 gVisor integration tests deselected; compilation passed; `git diff --check` passed. The journal-contiguity implementation fix was committed in `e9ed458`.
 
 ## 17. Frozen Baseline Rule
 
