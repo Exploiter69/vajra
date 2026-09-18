@@ -5,6 +5,7 @@ from time import monotonic
 
 from vajra.routing.contracts import ModelIdentity, ModelRequest, ModelResult, ModelUsage
 from vajra.runtime.http_worker_transport import HTTPWorkerTransport
+from vajra.runtime.kaggle_batch_transport import KaggleBatchWorkerTransport
 from vajra.runtime.worker_protocol import WorkerJob
 
 
