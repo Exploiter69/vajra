@@ -1,83 +1,57 @@
 # VAJRA
 
-VAJRA is a local-first, model-agnostic autonomous engineering runtime built around durable Engineering Runs, trusted execution, isolated workspaces, deterministic policy, independent verification, recovery, and human control.
+VAJRA is a local-first, model-agnostic autonomous engineering runtime built around durable Engineering Runs, trusted execution, isolated workspaces, deterministic policy, independent verification, recovery, human control, and provenance-bound engineering memory.
 
 VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot, model-hosting platform, or collection of shell scripts.
 
 ## Current Status
 
-**Phase 13 — Always-On Control Plane: COMPLETE / CLOSED.**
+**Phase 14 — Engineering Memory: COMPLETE / CLOSED.**
 
-Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior before routing was enabled.
-
-Phase 12 adds model/worker routing without changing the authority boundary:
-
-```text
-TASK
-   ↓
-COMPLEXITY
-   ↓
-CAPABILITY ROUTER
-   ↓
-MODEL / WORKER SELECTION
-   ↓
-MODEL GATEWAY
-   ↓
-MODEL RESULT + ROUTING EVIDENCE
-   ↓
-POLICY → BROKER → VERIFICATION
-```
+Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior. Phase 12 added capability-aware model/worker routing. Phase 13 added the always-on control plane. Phase 14 adds provenance-bound memory without making history authoritative.
 
 **Operating-cost constraint:** ₹0.00. No paid inference or infrastructure is a project dependency.
 
+## Phase 14 implementation
+
+- src/vajra/memory/contracts.py — immutable memory records, query and conflict contracts
+- src/vajra/memory/store.py — append-only fsync-backed JSONL persistence with tamper detection and supersession
+- src/vajra/memory/service.py — failure/repository/context memory facade and current-state validation
+- tests/memory/test_phase14_memory.py — Phase 14 gate coverage
+- docs/PHASE_14_IMPLEMENTATION.md — roadmap-to-implementation mapping
+- .github/workflows/phase14-validation.yml — free hosted validation
+
+### 14A — Failure Memory
+
+Failure signatures and outcomes are stored with Run/Step/Attempt identity, repository state, and mandatory source references. Memory informs recovery reasoning but cannot authorize recovery or completion.
+
+### 14B — Repository Memory
+
+Architecture, conventions, structured decisions, and verification history are retained with repository revision/digest. Historical repository memory is stale when current repository truth changes.
+
+### 14C — Context Memory
+
+Useful bounded context is retained with repository revision, context digest, item provenance, and source references. Context memory is invalidated by current-state changes rather than silently reused.
+
+### 14D — Conflict Awareness
+
+Current repository and verification truth outrank historical memory. Corrections are append-only records linked with supersedes; normal queries hide superseded history while preserving it for audit.
+
+**Phase 14 gate:** CLOSED after dedicated memory tests, portable full suite, compilation, diff checks, and GitHub Actions validation pass.
+
+Phase 14 deliberately does not introduce a vector database, embeddings, autonomous memory rewriting, model-controlled memory authority, or paid infrastructure.
+
 ## Phase 13 implementation
 
-- `src/vajra/control_plane/plane.py` — always-on daemon, durable queue dispatch, human controls and scheduler
-- `src/vajra/control_plane/store.py` — append-only fsync-backed queue/schedule/control journal with restart recovery
-- `src/vajra/control_plane/contracts.py` — control commands and schedule contracts
-- `src/vajra/control_plane/api.py` — localhost-by-default HTTP/JSON control surface
-- `tests/control_plane/test_phase13_control_plane.py` — Phase 13 gate coverage
-- `docs/PHASE_13_IMPLEMENTATION.md` — roadmap-to-implementation mapping
-- `.github/workflows/phase13-validation.yml` — free hosted validation
-
-**Phase 13 gate:** CLOSED. Final CI passed the Phase 13 suite, portable full suite, compilation, and diff checks.
-
-Phase 13 preserves canonical Run ownership and routes all Run mutations through RunManager/TransitionAuthority. `CANCEL` is resumable pause/cancellation; `ABORT` is terminal. Scheduled jobs enter the same durable Run queue rather than becoming an external source of truth.
+Phase 13 provides the always-on daemon, durable queue, human controls, scheduling, and localhost-by-default HTTP/JSON control surface. Canonical Run state remains in the Run plane.
 
 ## Phase 12 implementation
 
-- `src/vajra/routing/contracts.py` — model identity, request/result, usage, task complexity, routing evidence and budget contracts
-- `src/vajra/routing/gateway.py` — stable model gateway, registry and dependency-free adapter boundary
-- `src/vajra/routing/workers.py` — capability-based worker descriptors and registry
-- `src/vajra/routing/router.py` — deterministic complexity/capability/budget routing
-- `src/vajra/routing/recovery.py` — bounded same-model/strategy/model/worker/human fallback sequence
-- `tests/routing/test_phase12_routing.py` — Phase 12 routing and recovery gate coverage
-- `docs/PHASE_12_IMPLEMENTATION.md` — roadmap-to-implementation mapping and closure evidence
-- `.github/workflows/phase12-validation.yml` — free hosted validation
-
-Phase 12 deliberately does not make Oracle mandatory, make Kaggle canonical, add paid providers, or permit routing to bypass Policy, Execution Broker, leases, or independent Verification.
+Phase 12 provides model identity/versioning, capability-based worker routing, deterministic selection, budget-aware routing, routing evidence, and bounded model/worker switching without bypassing Policy, Broker, leases, or independent Verification.
 
 ## Phase 11 implementation
 
-Phase 11 validates unattended durability under failure rather than only the happy path:
-
-- deterministic kill schedules for controller, worker, model, process, network, sandbox and machine simulation;
-- a real `SIGKILL` recovery harness across all seven modeled failure domains;
-- state-divergence detection without replacing Phase 7 reconciliation;
-- hard retry-storm termination;
-- lease-expiry/fencing race coverage;
-- explicit 1h / 12h / 3d / 7d / 30d long-run profiles;
-- a real elapsed-time `SoakRunner` with monotonic timing and resource measurement;
-- soak metrics for memory, disk, events, context, worker leaks, stale leases, retries, verification/provider failures and clock anomalies.
-
-## Phase 10 implementation
-
-- `src/vajra/autonomy/contracts.py` — structured plans, planned intents, progress measurements, reasoning boundary
-- `src/vajra/autonomy/loop.py` — bounded autonomous engineering controller
-- `tests/autonomy/test_phase10_loop.py` — end-to-end and safety coverage
-- `docs/PHASE_10_IMPLEMENTATION.md` — roadmap-to-implementation mapping and closure evidence
-- `docs/PHASE_10_GATE_RESULT.md` — formal Phase 10 gate record
-- `.github/workflows/phase10-validation.yml` — free hosted validation
+Phase 11 validates unattended durability under failure with kill/recovery harnesses, state divergence, retry storms, lease fencing, and real elapsed-time soak profiles.
 
 ## Architectural Laws
 
@@ -91,24 +65,30 @@ Phase 11 validates unattended durability under failure rather than only the happ
 8. Autonomy Is Bounded
 9. Progress Requires Evidence
 10. Human Is Ultimate Authority
+11. Fresh Reality Before Autonomous Decision
+12. Evidence-Bound Progress
+13. No Ambiguous Continuation
+14. Operation Identity
+15. Controller Cannot Bypass Authority
+16. Historical Information Is Not Current Truth
 
 ## Repository Documentation
 
-- `docs/VAJRA_v0_Technical_Specification.txt` — canonical v0 architecture/specification
-- `docs/VAJRA_v1_Architecture_and_Roadmap_Specification.md` — converged roadmap
-- `docs/CURRENT_STATE.md` — current implementation/gate state
-- `docs/PHASE_7_DESIGN_FREEZE.md` — Phase 7 safety/control design freeze
-- `docs/PHASE_8_IMPLEMENTATION.md` — context/workspace implementation
-- `docs/PHASE_9_IMPLEMENTATION.md` — verification/anti-gaming implementation
-- `docs/PHASE_9_GATE_RESULT.md` — Phase 9 closure record
-- `docs/PHASE_10_IMPLEMENTATION.md` — Phase 10 implementation and closure evidence
-- `docs/PHASE_10_GATE_RESULT.md` — Phase 10 gate closure record
-- `docs/PHASE_11_IMPLEMENTATION.md` — Phase 11 implementation and closure evidence
-- `docs/PHASE_11_GATE_RESULT.md` — Phase 11 gate closure record
-- `docs/PHASE_12_IMPLEMENTATION.md` — Phase 12 implementation and closure evidence
-- `docs/PHASE_13_IMPLEMENTATION.md` — Phase 13 implementation and roadmap mapping
-- `docs/PHASE_13_GATE_RESULT.md` — Phase 13 gate closure record
+- docs/VAJRA_v0_Technical_Specification.txt — canonical v0 architecture/specification
+- docs/VAJRA_v1_Architecture_and_Roadmap_Specification.md — converged roadmap
+- docs/CURRENT_STATE.md — current implementation/gate state
+- docs/PHASE_7_DESIGN_FREEZE.md — Phase 7 safety/control design freeze
+- docs/PHASE_8_IMPLEMENTATION.md — context/workspace implementation
+- docs/PHASE_9_IMPLEMENTATION.md — verification/anti-gaming implementation
+- docs/PHASE_9_GATE_RESULT.md — Phase 9 closure record
+- docs/PHASE_10_IMPLEMENTATION.md — Phase 10 implementation and closure evidence
+- docs/PHASE_11_IMPLEMENTATION.md — Phase 11 implementation and closure evidence
+- docs/PHASE_11_GATE_RESULT.md — Phase 11 gate closure record
+- docs/PHASE_12_IMPLEMENTATION.md — Phase 12 implementation and closure evidence
+- docs/PHASE_13_IMPLEMENTATION.md — Phase 13 implementation and roadmap mapping
+- docs/PHASE_13_GATE_RESULT.md — Phase 13 gate closure record
+- docs/PHASE_14_IMPLEMENTATION.md — Phase 14 implementation and roadmap mapping
 
 ## Frozen Baseline
 
-`v0.1.0` / `fb3cca5` remains the immutable Phase 6 baseline. Later work proceeds on `main` without rewriting or retagging that baseline.
+v0.1.0 / fb3cca5 remains the immutable Phase 6 baseline. Later work proceeds on main without rewriting or retagging that baseline.
