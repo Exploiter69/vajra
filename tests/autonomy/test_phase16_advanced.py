@@ -61,13 +61,13 @@ def test_specialized_workers_are_singular_and_deterministic():
         registry.select(WorkerSpecialization.SECURITY)
 
 
-def test_cross_repository_authority_is_explicit():
+def test_cross_repository_authority_is_explicit(tmp_path: Path):
     objective = MultiStepObjective(
         "o", "cross repo",
         (AdvancedStage("s", "s", "s"),),
         (repo("a"), repo("b")),
     )
-    engine = AdvancedAutonomyEngine(store=AdvancedRunStore("/tmp/vajra-phase16-authority-test.jsonl"))
+    engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "authority.jsonl"))
     engine.authorize_operation(objective, CrossRepositoryOperation("op", "intent", ("a", "b"), "coordinated change"))
     with pytest.raises(AdvancedAutonomyError):
         engine.authorize_operation(objective, CrossRepositoryOperation("bad", "intent", ("a", "c"), "unauthorized"))
