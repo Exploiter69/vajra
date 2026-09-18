@@ -3,7 +3,7 @@
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
 **Phase:** Phase 14 — Engineering Memory complete  
-**Implementation status:** Phase 14 complete / closed  
+**Implementation status:** Phase 14 implemented / gate pending  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
