@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from vajra.autonomy.contracts import EngineeringPlan, PlannedIntent
@@ -56,7 +56,7 @@ class GatewayReasoner:
             output_schema=schema,
             budget=BudgetEnvelope(max_model_calls=1, max_worker_runtime_seconds=300,
                                   max_output_size=self.max_output_tokens * 4, max_cost_units=0),
-            deadline=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+            deadline=(datetime.now(timezone.utc) + timedelta(seconds=300)).replace(microsecond=0).isoformat(),
             model=self.model_identity, strategy_id="qwen-" + phase,
         )
         result = self.gateway.invoke(request, self.model_identity)
