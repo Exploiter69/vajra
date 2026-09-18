@@ -150,7 +150,7 @@ class RunManager:
         with self._lock:
             run = self.get_run(run_id)
             previous = deepcopy(run)
-            if run.state not in {RunState.QUEUED, RunState.PAUSED, RunState.RECOVERING, RunState.WAITING_HUMAN}:
+            if run.state not in {RunState.RECOVERING, RunState.WAITING_HUMAN}:
                 raise ValueError(f"Run cannot be aborted from state {run.state.value}: {run_id}")
             self._transition_authority.assert_authorized(run, RunState.ABORTED, actor, reason=reason)
             transition_run(run, RunState.ABORTED)

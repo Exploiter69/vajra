@@ -3,7 +3,7 @@
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
 **Phase:** Phase 13 — Always-On Control Plane complete  
-**Implementation status:** Phase 13 implementation complete / gate pending  
+**Implementation status:** Phase 13 complete / closed  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -257,7 +257,7 @@ Routing only selects resources. It does not authorize operations, mutate canonic
 
 ### Phase 13 — Always-On Control Plane
 
-**Status: IMPLEMENTED / GATE PENDING**
+**Status: COMPLETE / CLOSED**
 
 Phase 13 implements the canonical roadmap's 13A–13E scope:
 
@@ -310,7 +310,7 @@ Until a later roadmap phase or explicit design decision:
 
 ## 14. Next Phase Boundary
 
-Phase 13 is implemented and awaiting final local/remote gate verification. The next roadmap boundary is **PHASE 14 — ENGINEERING MEMORY**.
+Phase 13 is complete and closed. The next roadmap boundary is **PHASE 14 — ENGINEERING MEMORY**.
 
 The routing layer remains subordinate to the existing authority chain:
 

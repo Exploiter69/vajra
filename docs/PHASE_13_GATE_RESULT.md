@@ -1,7 +1,7 @@
 # Phase 13 Gate Result
 
 **Phase:** 13 — Always-On Control Plane  
-**Result:** CLOSED after local and GitHub CI validation  
+**Result:** CLOSED after GitHub Actions run `35300794216`  
 **Cost:** ₹0.00
 
 ## Roadmap coverage
@@ -20,8 +20,8 @@ The control plane does not become a second authority layer. It delegates Run mut
 
 ## Validation
 
-- Phase 13 tests: PASS
-- Portable full suite: PASS
+- Phase 13 tests: **12 passed**
+- Portable full suite: **635 passed, 4 deselected**
 - Compile: PASS
 - git diff --check: PASS
 - GitHub Actions: PASS for the final Phase 13 commit

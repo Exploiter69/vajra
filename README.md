@@ -6,7 +6,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 13 — Always-On Control Plane: IMPLEMENTED / GATE PENDING.**
+**Phase 13 — Always-On Control Plane: COMPLETE / CLOSED.**
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior before routing was enabled.
 
@@ -39,6 +39,8 @@ POLICY → BROKER → VERIFICATION
 - `tests/control_plane/test_phase13_control_plane.py` — Phase 13 gate coverage
 - `docs/PHASE_13_IMPLEMENTATION.md` — roadmap-to-implementation mapping
 - `.github/workflows/phase13-validation.yml` — free hosted validation
+
+**Phase 13 gate:** CLOSED. Final CI passed the Phase 13 suite, portable full suite, compilation, and diff checks.
 
 Phase 13 preserves canonical Run ownership and routes all Run mutations through RunManager/TransitionAuthority. `CANCEL` is resumable pause/cancellation; `ABORT` is terminal. Scheduled jobs enter the same durable Run queue rather than becoming an external source of truth.
 
