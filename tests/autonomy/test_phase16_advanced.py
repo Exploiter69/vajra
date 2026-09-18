@@ -68,9 +68,9 @@ def test_cross_repository_authority_is_explicit(tmp_path: Path):
         (repo("a"), repo("b")),
     )
     engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "authority.jsonl"))
-    engine.authorize_operation(objective, CrossRepositoryOperation("op", "intent", ("a", "b"), "coordinated change"))
+    engine.authorize_operation(objective, CrossRepositoryOperation("op", "intent", ("a", "b"), "coordinated change", frozenset({"modify"})))
     with pytest.raises(AdvancedAutonomyError):
-        engine.authorize_operation(objective, CrossRepositoryOperation("bad", "intent", ("a", "c"), "unauthorized"))
+        engine.authorize_operation(objective, CrossRepositoryOperation("bad", "intent", ("a", "c"), "unauthorized", frozenset({"modify"})))
 
 
 def test_execution_is_verified_and_durablely_resumable(tmp_path: Path):
@@ -114,3 +114,10 @@ def test_replan_bound_and_stage_bound_are_hard(tmp_path: Path):
     engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "advanced.jsonl"), limits=LongHorizonLimits(max_stages=1))
     with pytest.raises(AdvancedAutonomyError, match="stage count"):
         engine.next_stages(objective)
+
+
+def test_cross_repository_operation_must_be_authorized_per_repository(tmp_path: Path):
+    objective = MultiStepObjective("o2", "cross repo", (AdvancedStage("s", "s", "s"),), (repo("a", frozenset({"inspect", "modify"})), repo("b", frozenset({"inspect"}))))
+    engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "authority.jsonl"))
+    with pytest.raises(AdvancedAutonomyError, match="unauthorized operations"):
+        engine.authorize_operation(objective, CrossRepositoryOperation("op", "intent", ("a", "b"), "bad scope", frozenset({"modify"})))
