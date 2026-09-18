@@ -2,8 +2,8 @@
 
 **Project:** VAJRA  
 **Version:** v0.1.0 baseline + post-v0 operationalization  
-**Phase:** Phase 14 — Engineering Memory complete  
-**Implementation status:** Phase 14 complete / closed  
+**Phase:** Phase 15 — Production Hardening  
+**Implementation status:** Phase 15 implemented / gate pending  
 **Frozen baseline:** `v0.1.0` / `fb3cca5`  
 **Operating-cost constraint:** ₹0.00
 
@@ -91,6 +91,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 12 — Model + worker routing | COMPLETE / Gate PASSED | gateway, capability routing, switching/recovery, routing evidence, portable CI |
 | Phase 13 — Always-on control plane | COMPLETE / CLOSED | daemon, durable queue, human controls, scheduling, API |
 | Phase 14 — Engineering Memory | COMPLETE / CLOSED | failure, repository, context memory and conflict awareness |
+| Phase 15 — Production Hardening | IMPLEMENTED / GATE PENDING | security, resource controls, observability |
 
 ---
 
@@ -276,7 +277,7 @@ The control plane does not own canonical Run state, execute model/worker work it
 - Kaggle remains an ephemeral worker, never canonical state.
 - No paid inference or infrastructure was introduced.
 - Phase 13 now provides the always-on control plane.
-- Phase 14 Engineering Memory is now complete and closed.
+- Phase 14 Engineering Memory is complete and closed; Phase 15 Production Hardening is implemented and gate-pending.
 
 ---
 
