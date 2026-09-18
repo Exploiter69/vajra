@@ -110,7 +110,7 @@ class SelfImprovementEngine:
         self._validate_scope(proposal)
         if self.store.state(proposal.proposal_id) is not None:
             raise SelfImprovementError("proposal already exists")
-        self.store.record(proposal.proposal_id, ProposalState.PROPOSED, 1)
+        self.store.record(proposal.proposal_id, ProposalState.PROPOSED, self.store._sequence)
 
     def isolate(
         self,
@@ -181,15 +181,16 @@ class SelfImprovementEngine:
         state = self.store.state(proposal.proposal_id)
         if state is None or state is ProposalState.PROMOTED:
             raise SelfImprovementError("proposal cannot be rejected in its current state")
-        self.store.record(proposal.proposal_id, ProposalState.REJECTED, 9)
+        self.store.record(proposal.proposal_id, ProposalState.REJECTED, self.store._sequence)
 
     def _validate_scope(self, proposal: ImprovementProposal) -> None:
         if proposal.area.value not in self.ALLOWED_AREAS:
             raise SelfImprovementError("proposal area is not eligible for controlled self-improvement")
         for raw_path in proposal.changed_paths:
-            path = raw_path.replace("\\", "/").lstrip("./")
-            if path.startswith("/") or ".." in path.split("/"):
+            normalized_raw = raw_path.replace("\\", "/")
+            if normalized_raw.startswith("/") or ".." in normalized_raw.split("/"):
                 raise SelfImprovementError("proposal contains unsafe path")
+            path = self._normalize_paths((raw_path,))[0]
             if path in self.PROTECTED_NAMES or any(path.startswith(prefix) for prefix in self.PROTECTED_PREFIXES):
                 raise SelfImprovementError(
                     f"proposal attempts to modify protected authority surface: {path}"
