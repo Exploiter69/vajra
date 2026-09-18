@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 ROOT = Path("/kaggle/working")
 JOB_PATH = ROOT / "worker_job.json"
 RESULT_PATH = ROOT / "worker_result.json"
+EMBEDDED_JOB_JSON: str | None = None
 MODEL = os.environ.get("VAJRA_MODEL", "qwen2.5-coder:32b")
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 PROTOCOL = "vajra-worker-v1"
@@ -68,7 +69,12 @@ def infer(prompt: str) -> tuple[str, dict]:
 
 
 def main() -> int:
-    payload = json.loads(JOB_PATH.read_text(encoding="utf-8"))
+    if JOB_PATH.is_file():
+        payload = json.loads(JOB_PATH.read_text(encoding="utf-8"))
+    elif EMBEDDED_JOB_JSON is not None:
+        payload = json.loads(EMBEDDED_JOB_JSON)
+    else:
+        raise FileNotFoundError(f"worker job not found: {JOB_PATH}")
     if payload.get("protocol_version") != PROTOCOL or payload.get("type") != "worker_job":
         raise ValueError("unsupported worker job envelope")
     job = payload.get("job")
