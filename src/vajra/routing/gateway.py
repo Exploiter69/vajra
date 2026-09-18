@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import json
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -96,7 +97,7 @@ class ModelGateway:
         if self._resource_governor is not None:
             decision = self._resource_governor.charge(
                 model_calls=result.usage.model_calls,
-                output_bytes=result.usage.output_tokens,
+                output_bytes=len(json.dumps(result.structured_output, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")),
                 worker_runtime_seconds=result.usage.runtime_seconds,
             )
             if not decision.allowed:
