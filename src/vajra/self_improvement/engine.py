@@ -85,6 +85,9 @@ class SelfImprovementEngine:
         "src/vajra/runtime/",
         "src/vajra/domain/",
         "src/vajra/hardening/",
+        "src/vajra/autonomy/",
+        "src/vajra/control_plane/",
+        "src/vajra/self_improvement/",
     )
 
     PROTECTED_NAMES = frozenset({
