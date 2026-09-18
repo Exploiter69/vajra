@@ -149,16 +149,6 @@ fresh reality
 
 Context remains informational. Repository instructions remain untrusted repository content. Worktree isolation remains distinct from sandbox security isolation.
 
-## Validation gate
+## Validation / closure
 
-The implementation must not be marked fully validated until the local repository executes:
-
-```text
-pytest -q tests/context tests/control/test_workspace.py
-pytest -q
-python -m compileall -q src tests
-
-git diff --check
-```
-
-The expected condition is zero failures, successful compilation, and a clean diff check. The full-suite result should be recorded here only after it is actually observed from the repository checkout.
+Phase 8 is closed by the later Phase 9 baseline record, which explicitly records **Phase 8 complete at 565 tests**. The earlier validation-gate wording above was an implementation-time checkpoint and is historical; Phase 9 proceeded only after the Phase 8 substrate was treated as complete.
