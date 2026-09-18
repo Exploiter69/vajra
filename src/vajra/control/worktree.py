@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from vajra.control.contracts import WorktreeContract
+from vajra.hardening import SecurityPolicy
 
 
 class WorktreeError(RuntimeError):
@@ -33,7 +34,8 @@ class WorktreeManager:
     operations inside them.
     """
 
-    def __init__(self, metadata_root: str | Path | None = None) -> None:
+    def __init__(self, metadata_root: str | Path | None = None, *, security_policy: SecurityPolicy | None = None) -> None:
+        self._security = security_policy or SecurityPolicy()
         self._metadata_root = (
             Path(metadata_root).expanduser().resolve()
             if metadata_root is not None
@@ -96,6 +98,10 @@ class WorktreeManager:
 
         if not repository_path.is_dir():
             raise WorktreeError(f"repository does not exist: {repository_path}")
+        try:
+            self._security.assert_repository_safe(repository_path)
+        except Exception as exc:
+            raise WorktreeError(str(exc)) from exc
 
         if workspace_path.exists():
             raise WorktreeError(
