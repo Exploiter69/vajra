@@ -4,7 +4,7 @@
 
 ## Roadmap coverage
 
-Phase 15 covers the complete roadmap scope: filesystem, symlink and TOCTOU boundary hardening; credentials and environment isolation; Git hooks and submodule controls; package lifecycle-script controls; network and sandbox restrictions; worker/result identity preservation; prompt-injection boundary detection; malicious-repository admission checks; CPU, memory, disk, network, process, output, model-call and worker-runtime resource controls; and durable run observability across steps, attempts, workers, models, intents, executions, failures, recoveries, verification and evidence.
+Phase 15 covers the complete roadmap scope: filesystem, symlink and TOCTOU boundary hardening; credentials and environment isolation; Git hooks and submodule controls; package lifecycle-script controls; network and sandbox restrictions; worker authentication and result/replay identity preservation; prompt-injection boundary detection; malicious-repository admission checks; CPU, memory, disk, network, process, output, model-call and worker-runtime resource controls; and durable run observability across steps, attempts, workers, models, intents, executions, failures, recoveries, verification and evidence.
 
 ## Implementation
 
