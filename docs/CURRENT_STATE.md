@@ -277,7 +277,7 @@ The control plane does not own canonical Run state, execute model/worker work it
 - Kaggle remains an ephemeral worker, never canonical state.
 - No paid inference or infrastructure was introduced.
 - Phase 13 now provides the always-on control plane.
-- Phase 14 Engineering Memory is complete and closed; Phase 15 Production Hardening is implemented and gate-pending.
+- Phase 14 Engineering Memory and Phase 15 Production Hardening are complete and closed.
 
 ---
 
@@ -334,7 +334,6 @@ These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requi
 
 Until a later roadmap phase or explicit design decision:
 
-- production hardening (Phase 15)
 - distributed worker pool beyond the Phase 12 capability abstraction
 - multiple concurrent Runs
 - Kubernetes
@@ -350,7 +349,7 @@ Until a later roadmap phase or explicit design decision:
 
 ## 16. Next Phase Boundary
 
-Phase 14 is complete and closed after the final local gate. The next roadmap boundary is **PHASE 16 — ADVANCED AUTONOMY**.
+Phase 15 is complete and closed after the final local gate. Phase 16 is implemented and its final local gate is pending. The next roadmap boundary after Phase 16 closure is **PHASE 17 — CONTROLLED SELF-IMPROVEMENT**.
 
 The routing layer remains subordinate to the existing authority chain:
 
