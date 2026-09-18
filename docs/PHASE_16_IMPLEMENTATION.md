@@ -1,6 +1,6 @@
 # VAJRA Phase 16 — Advanced Autonomy
 
-**Status:** IMPLEMENTED / GATE PENDING
+**Status:** COMPLETE / CLOSED
 
 Phase 16 follows the canonical roadmap in `vajra3`: 16A multi-step engineering, 16B explicit multi-repository authority, 16C specialized workers without a default swarm, and 16D bounded complex/long-horizon objectives.
 
@@ -51,4 +51,4 @@ The Phase 16 gate must pass:
 3. `python -m compileall -q src tests`;
 4. `git diff --check`.
 
-Phase 16 is not closed until all four checks pass.
+Phase 16 is closed: the dedicated suite passed 9 tests; the portable full suite passed 661 tests with 4 gVisor tests deselected; compile and diff checks passed.
