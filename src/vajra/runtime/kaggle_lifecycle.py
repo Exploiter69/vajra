@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from vajra.runtime.worker_lifecycle import ManagedWorkerProvider
+from vajra.runtime.worker_provider import HTTPWorkerProvider, WorkerEndpoint
+
 
 class KaggleLifecycleError(RuntimeError):
     """Kaggle kernel lifecycle command failed."""
@@ -78,3 +81,37 @@ class KaggleKernelLauncher:
 
 
 __all__ = ["KaggleKernelLauncher", "KaggleLifecycleError"]
+
+
+
+class KaggleManagedWorkerProvider(ManagedWorkerProvider):
+    """Managed worker provider for a Kaggle kernel plus an exposed HTTP worker.
+
+    Kaggle controls batch kernel lifecycle; HTTPWorkerProvider independently
+    proves that the worker endpoint is reachable and advertises the expected
+    protocol/model. No lease is created from Kaggle CLI status alone.
+    """
+
+    def __init__(
+        self,
+        launcher: KaggleKernelLauncher,
+        http_provider: HTTPWorkerProvider,
+        *,
+        readiness_timeout_seconds: float = 120.0,
+        poll_interval_seconds: float = 2.0,
+    ) -> None:
+        self.launcher = launcher
+        self.http_provider = http_provider
+        super().__init__(
+            http_provider,
+            start=launcher.start,
+            stop=lambda _endpoint: launcher.stop(),
+            readiness_timeout_seconds=readiness_timeout_seconds,
+            poll_interval_seconds=poll_interval_seconds,
+        )
+
+    def endpoint(self) -> WorkerEndpoint:
+        return self.ensure_ready()
+
+
+__all__ = ["KaggleKernelLauncher", "KaggleLifecycleError", "KaggleManagedWorkerProvider"]
