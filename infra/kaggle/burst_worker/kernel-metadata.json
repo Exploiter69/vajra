@@ -1,0 +1,11 @@
+{
+  "id": "REPLACE_WITH_KAGGLE_KERNEL_REF",
+  "title": "VAJRA Burst Worker",
+  "code_file": "worker.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "machine_shape": "GpuT4x2"
+}
