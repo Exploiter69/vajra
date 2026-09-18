@@ -273,7 +273,7 @@ class AdvancedAutonomyEngine:
         replans = 0
         attempts = 0
         started = monotonic()
-        for stage in objective.stages:
+        for stage in _topological_order(objective.stages):
             if monotonic() - started > self.limits.max_wall_clock_seconds:
                 raise AdvancedAutonomyError("long-horizon wall-clock bound exhausted")
             attempts += 1
@@ -341,3 +341,19 @@ def _validate_dag(stages: tuple[AdvancedStage, ...]) -> None:
 
     for node in ids:
         visit(node)
+
+
+def _topological_order(stages: tuple[AdvancedStage, ...]) -> tuple[AdvancedStage, ...]:
+    by_id = {stage.stage_id: stage for stage in stages}
+    remaining = set(by_id)
+    ordered: list[AdvancedStage] = []
+    while remaining:
+        ready = sorted(
+            (sid for sid in remaining if set(by_id[sid].depends_on).issubset({s.stage_id for s in ordered})),
+        )
+        if not ready:
+            raise AdvancedAutonomyError("stage dependency graph cannot be topologically ordered")
+        for sid in ready:
+            ordered.append(by_id[sid])
+            remaining.remove(sid)
+    return tuple(ordered)
