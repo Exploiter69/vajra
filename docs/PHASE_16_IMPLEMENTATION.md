@@ -6,7 +6,7 @@ Phase 16 follows the canonical roadmap in `vajra3`: 16A multi-step engineering, 
 
 ## 16A — Multi-step engineering
 
-`src/vajra/autonomy/advanced.py` introduces `MultiStepObjective` and `AdvancedStage`. A stage graph is validated as a DAG with unique IDs and explicit dependencies. The engine advances only when dependencies are complete.
+`src/vajra/autonomy/advanced.py` introduces `MultiStepObjective` and `AdvancedStage`. A stage graph is validated as a DAG with unique IDs and explicit dependencies. The engine validates the stage DAG and executes it in deterministic topological order, advancing only when dependencies are complete.
 
 The canonical example is represented as explicit stages:
 
