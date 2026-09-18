@@ -59,9 +59,21 @@ class KaggleBatchWorkerTransport:
                 json.dumps(metadata, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
-            (kernel_dir / "worker_job.json").write_text(
-                adapter.encode_job(job), encoding="utf-8"
+            job_json = adapter.encode_job(job)
+            (kernel_dir / "worker_job.json").write_text(job_json, encoding="utf-8")
+            worker_path = kernel_dir / "worker.py"
+            worker_source = worker_path.read_text(encoding="utf-8")
+            marker = "EMBEDDED_JOB_JSON: str | None = None"
+            if marker not in worker_source:
+                raise KaggleBatchWorkerError(
+                    "kernel template worker.py has no embedded-job marker"
+                )
+            worker_source = worker_source.replace(
+                marker,
+                f"EMBEDDED_JOB_JSON: str | None = {job_json!r}",
+                1,
             )
+            worker_path.write_text(worker_source, encoding="utf-8")
 
             launcher = KaggleKernelLauncher(
                 kernel_dir,
