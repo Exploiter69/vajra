@@ -44,10 +44,14 @@ class JsonlMemoryStore(MemoryStore):
                     raise ValueError(f"invalid memory journal record at line {line_no}") from exc
                 if record.memory_id in self._records:
                     raise ValueError(f"duplicate memory id: {record.memory_id}")
+                if record.supersedes == record.memory_id:
+                    raise ValueError(f"memory record cannot supersede itself: {record.memory_id}")
                 self._records[record.memory_id] = record
 
     def append(self, record: MemoryRecord) -> None:
         with self._lock:
+            if record.supersedes is not None and record.supersedes not in self._records:
+                raise ValueError(f"superseded memory does not exist: {record.supersedes}")
             existing = self._records.get(record.memory_id)
             if existing is not None:
                 if existing.record_digest == record.record_digest:
@@ -72,6 +76,9 @@ class JsonlMemoryStore(MemoryStore):
         terms = tuple(t.lower() for t in (query.text or "").split() if t)
         with self._lock:
             records: Iterable[MemoryRecord] = tuple(self._records.values())
+            if not query.include_superseded:
+                superseded = {r.supersedes for r in records if r.supersedes}
+                records = [r for r in records if r.memory_id not in superseded]
             records = [r for r in records if query.kind is None or r.kind is query.kind]
             records = [r for r in records if query.repository_id is None or r.repository_id == query.repository_id]
             records = [r for r in records if query.run_id is None or r.run_id == query.run_id]
