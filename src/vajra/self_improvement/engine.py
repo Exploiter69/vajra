@@ -30,6 +30,8 @@ class SelfImprovementStore:
 
     def record(self, proposal_id: str, state: ProposalState, sequence: int) -> None:
         with self._lock:
+            if sequence != self._sequence:
+                raise SelfImprovementError("proposal journal sequence must remain contiguous")
             current = self._state.get(proposal_id)
             if current and sequence <= current[1]:
                 raise SelfImprovementError("proposal journal sequence must increase")
