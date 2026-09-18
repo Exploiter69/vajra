@@ -200,6 +200,9 @@ class SelfImprovementEngine:
         if not paths:
             raise SelfImprovementError("self-improvement revision has no changed paths")
         for path in paths:
+            normalized_raw = path.replace("\\", "/")
+            if normalized_raw.startswith("/") or ".." in normalized_raw.split("/"):
+                raise SelfImprovementError("self-improvement revision contains unsafe path")
             normalized = self._normalize_paths((path,))[0]
             if normalized in self.PROTECTED_NAMES or any(normalized.startswith(prefix) for prefix in self.PROTECTED_PREFIXES):
                 raise SelfImprovementError(
