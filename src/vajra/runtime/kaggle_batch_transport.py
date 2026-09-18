@@ -90,7 +90,7 @@ class KaggleBatchWorkerTransport:
             parsed = datetime.fromisoformat(job.deadline.replace("Z", "+00:00"))
         except ValueError as exc:
             raise KaggleBatchWorkerError("invalid WorkerJob deadline") from exc
-        return parsed.timestamp()
+        return time.monotonic() + (parsed - datetime.now(timezone.utc)).total_seconds()
 
     def _wait_for_completion(
         self, launcher: KaggleKernelLauncher, deadline: float
