@@ -114,3 +114,25 @@ def test_kaggle_managed_provider_composes_launcher_and_http_readiness(monkeypatc
     assert calls == ["start", "ready"]
     managed.release()
     assert calls == ["start", "ready", "stop"]
+
+
+def test_kaggle_kernel_output_is_headless(monkeypatch, tmp_path):
+    from vajra.runtime.kaggle_lifecycle import KaggleKernelLauncher
+
+    calls = []
+    launcher = KaggleKernelLauncher(
+        tmp_path / "kernel",
+        kernel_ref="owner/worker",
+    )
+    monkeypatch.setattr(
+        launcher,
+        "_run",
+        lambda command, **kwargs: calls.append((tuple(command), kwargs)),
+    )
+    launcher.output(tmp_path / "out")
+    command, kwargs = calls[-1]
+    assert command[:3] == ("kaggle", "kernels", "output")
+    assert "owner/worker" in command
+    assert "-p" in command
+    assert "--force" in command
+    assert kwargs == {}
