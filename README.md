@@ -6,7 +6,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 14 — Engineering Memory: IMPLEMENTED / GATE PENDING.**
+**Phase 14 — Engineering Memory: COMPLETE / CLOSED.**
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior. Phase 12 added capability-aware model/worker routing. Phase 13 added the always-on control plane. Phase 14 adds provenance-bound memory without making history authoritative.
 
@@ -37,7 +37,7 @@ Useful bounded context is retained with repository revision, context digest, ite
 
 Current repository and verification truth outrank historical memory. Corrections are append-only records linked with supersedes; normal queries hide superseded history while preserving it for audit.
 
-**Phase 14 gate:** PENDING final local/remote validation.
+**Phase 14 gate:** COMPLETE / CLOSED. Final local gate: 8 memory tests passed; portable full suite 643 passed with 4 gVisor tests deselected; compile and diff checks passed.
 
 Phase 14 deliberately does not introduce a vector database, embeddings, autonomous memory rewriting, model-controlled memory authority, or paid infrastructure.
 
