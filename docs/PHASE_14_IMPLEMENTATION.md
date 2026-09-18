@@ -1,6 +1,6 @@
 # Phase 14 — Engineering Memory
 
-**Status:** IMPLEMENTED / GATE PENDING
+**Status:** COMPLETE / CLOSED
 
 Phase 14 implements the canonical roadmap requirements without making memory an authority layer.
 
@@ -46,8 +46,14 @@ Memory MUST NOT:
 - bypass Policy, Broker, fencing, sandbox, or human gates;
 - be treated as current truth without validation.
 
-## Validation required for closure
+## Final validation
 
-The Phase 14 workflow runs the dedicated memory tests, portable full suite, compilation, and git diff checking. The dedicated tests cover persistence/reload, provenance enforcement, repository staleness, current-state validation, context staleness, deterministic querying, supersession, identity separation, and journal tamper detection.
+The final local Phase 14 gate passed:
+- Dedicated memory tests: **8 passed**
+- Portable full suite: **643 passed, 4 deselected**
+- Python compilation: **PASS**
+- `git diff --check`: **PASS**
 
-Phase 14 intentionally does not introduce a vector database, embeddings, autonomous memory rewriting, model-controlled memory authority, or paid infrastructure.
+The GitHub Actions workflow remains configured for the same checks. The available workflow connector does not expose push-triggered runs for the final main revision, so no unsupported hosted-CI result is claimed.
+
+Phase 14 is closed. No vector database, embeddings, autonomous memory rewriting, model-controlled memory authority, or paid infrastructure was introduced.
