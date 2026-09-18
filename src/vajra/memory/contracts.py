@@ -65,13 +65,12 @@ class MemoryRecord:
     @classmethod
     def from_payload(cls, payload: Mapping[str, Any]) -> "MemoryRecord":
         return cls(
-            memory_id=str(payload["memory_id"]), kind=MemoryKind(str(payload["kind"])),
-            content=dict(payload["content"]), created_at=str(payload["created_at"]),
-            run_id=payload.get("run_id"), step_id=payload.get("step_id"), attempt_id=payload.get("attempt_id"),
-            repository_id=payload.get("repository_id"), source_revision=payload.get("source_revision"),
-            source_digest=payload.get("source_digest"), source_refs=tuple(payload.get("source_refs", ())),
-            provenance=str(payload.get("provenance", "HISTORICAL_MEMORY")), supersedes=payload.get("supersedes"),
-            tags=tuple(payload.get("tags", ())), record_digest=str(payload.get("record_digest", "")),
+            memory_id=str(payload["memory_id"]), kind=MemoryKind(str(payload["kind"])), content=dict(payload["content"]),
+            created_at=str(payload["created_at"]), run_id=payload.get("run_id"), step_id=payload.get("step_id"),
+            attempt_id=payload.get("attempt_id"), repository_id=payload.get("repository_id"),
+            source_revision=payload.get("source_revision"), source_digest=payload.get("source_digest"),
+            source_refs=tuple(payload.get("source_refs", ())), provenance=str(payload.get("provenance", "HISTORICAL_MEMORY")),
+            supersedes=payload.get("supersedes"), tags=tuple(payload.get("tags", ())), record_digest=str(payload.get("record_digest", "")),
         )
 
 
@@ -83,6 +82,7 @@ class MemoryQuery:
     tags: tuple[str, ...] = ()
     text: str | None = None
     limit: int = 20
+    include_superseded: bool = False
 
     def __post_init__(self) -> None:
         if not 1 <= self.limit <= 500:
