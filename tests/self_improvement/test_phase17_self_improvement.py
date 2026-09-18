@@ -225,4 +225,4 @@ def test_journal_sequence_must_remain_contiguous(tmp_path: Path):
     store = SelfImprovementStore(tmp_path / "journal.jsonl")
     store.record("p1", ProposalState.PROPOSED, 1)
     with pytest.raises(SelfImprovementError, match="contiguous"):
-        store.record("p1", ProposalState.ISOLATED, 3)
+        store.record("p1", ProposalState.ISOLATED, 2)
