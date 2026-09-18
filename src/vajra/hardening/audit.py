@@ -113,7 +113,7 @@ class Observability:
             "steps": sorted({e.step_id for e in events if e.step_id}),
             "attempts": sorted({e.attempt_id for e in events if e.attempt_id}),
             "workers": sorted({e.worker_id for e in events if e.worker_id}),
-            "models": sorted({e.model_id for e in events if e.model_id}),
+            "models": sorted({getattr(e, "model_id", None) for e in events if getattr(e, "model_id", None)}),
             "intents": sorted({e.payload.get("intent_id") for e in events if e.payload.get("intent_id")}),
             "executions": sorted({e.operation for e in events if e.operation}),
             "failures": [e.reason for e in events if e.event_type.value == "RECOVERY" or e.outcome == "FAILED"],
