@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from threading import RLock
-from time import monotonic\nfrom time import monotonic
+from time import monotonic
 from typing import Any, Callable
 
 
