@@ -1,6 +1,6 @@
 # Phase 15 — Gate Result
 
-**Status:** IMPLEMENTED / GATE PENDING
+**Status:** COMPLETE / CLOSED
 
 ## Roadmap coverage
 
@@ -18,12 +18,12 @@ Phase 15 covers the complete roadmap scope: filesystem, symlink and TOCTOU bound
 - model resource charging in src/vajra/routing/gateway.py
 - .github/workflows/phase15-validation.yml
 
-## Evidence boundary
+## Final local evidence
 
-Phase 15 is not closed until the final validation commands pass on the final repository revision. No test or hosted-CI result is fabricated in this document.
+The final local gate passed: 9 hardening tests, 652 portable-suite tests with 4 gVisor integration tests deselected, Python compilation, and `git diff --check`. Physical gVisor integration remains environment-specific and is not claimed here.
 
 Physical gVisor validation remains an environment-specific Gate D capability; hosted CI intentionally excludes gvisor_integration.
 
-## Closure rule
+## Closure
 
-When the final dedicated suite, portable full suite, compilation, and diff checks pass, this document may be changed to COMPLETE / CLOSED with the exact observed evidence.
+Phase 15 is closed on the basis of the recorded final local gate evidence. No hosted-CI result is fabricated.
