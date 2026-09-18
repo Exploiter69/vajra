@@ -1,6 +1,6 @@
 # Phase 14 — Gate Result
 
-**Status:** IMPLEMENTED / GATE PENDING
+**Status:** COMPLETE / CLOSED
 
 ## Roadmap coverage
 
@@ -23,14 +23,20 @@
 - Memory cannot authorize execution, mutate canonical Run state, redefine acceptance, or establish verification proof.
 - No vector database, embeddings, paid service, or model-controlled memory authority was introduced.
 
-## Validation
+## Final validation evidence
 
-Final closure requires all of the following on the resulting main revision:
+The final local Phase 14 gate passed on the synced `main` revision:
 
-1. Phase 14 dedicated tests pass.
-2. Portable full suite passes with gVisor integration excluded where the environment does not provide the sandbox.
-3. Python compilation passes.
-4. git diff --check passes.
-5. GitHub Actions Phase 14 workflow passes.
+- Dedicated memory suite: **8 passed**
+- Portable full suite: **643 passed, 4 deselected**
+- Python compilation: **PASS**
+- `git diff --check`: **PASS**
+- Final memory journal parsing cleanup: `fbac652b02514ffe2169122c825fbf236bd97aae`
 
-Until those checks are observed, this file intentionally remains **GATE PENDING** and makes no fabricated test or CI claim.
+The Phase 14 GitHub Actions workflow remains configured to run the dedicated suite, portable suite, compilation, and diff checks. The available GitHub workflow connector exposes PR-triggered runs only, so the push-triggered hosted run for the final `main` commit could not be independently observed here. No hosted-CI result is fabricated.
+
+## Closure
+
+Phase 14 is closed on the basis of the complete local gate and committed implementation. Memory informs reasoning but never becomes authority.
+
+**Next roadmap boundary: Phase 15 — Production Hardening.**
