@@ -81,7 +81,7 @@ class GatewayReasoner:
         payload = result.structured_output
         raw = payload.get("response") if isinstance(payload, dict) else None
         if isinstance(raw, str):
-            payload = json.loads(raw.strip().strip(chr(96)).strip())
+            text = raw.strip()\n            lines = text.splitlines()\n            if lines and lines[0].lstrip().startswith(chr(96)):\n                lines = lines[1:]\n            if lines and lines[-1].strip().startswith(chr(96)):\n                lines = lines[:-1]\n            payload = json.loads("\\n".join(lines).strip())
         if not isinstance(payload, dict):
             raise ModelProposalError("model plan is not a JSON object")
 
