@@ -207,3 +207,22 @@ def test_declared_and_actual_revision_paths_must_match(tmp_path: Path):
             lambda *_: None,
             lambda base, revision: ("src/vajra/routing/router.py", "src/vajra/routing/workers.py"),
         )
+
+
+def test_actual_revision_unsafe_paths_are_rejected(tmp_path: Path):
+    engine = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
+    p = proposal()
+    engine.propose(p)
+    with pytest.raises(SelfImprovementError, match="unsafe path"):
+        engine.isolate(
+            p,
+            lambda *_: None,
+            lambda base, revision: ("../outside.py",),
+        )
+
+
+def test_journal_sequence_must_remain_contiguous(tmp_path: Path):
+    store = SelfImprovementStore(tmp_path / "journal.jsonl")
+    store.record("p1", ProposalState.PROPOSED, 1)
+    with pytest.raises(SelfImprovementError, match="contiguous"):
+        store.record("p1", ProposalState.ISOLATED, 3)
