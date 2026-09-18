@@ -38,6 +38,12 @@ The Kaggle CLI can push a kernel and trigger a kernel run, but that is not the
 same contract as an always-on HTTP worker endpoint. Therefore Run #3 must not
 pretend that `kaggle kernels push` has solved worker endpoint lifecycle.
 
+VAJRA now has a composed `KaggleManagedWorkerProvider`: the Kaggle launcher owns
+start/stop mechanics, while `HTTPWorkerProvider` independently proves `/health`
+and `/capabilities` before `ManagedWorkerProvider` creates a lease. This closes
+the software lifecycle composition without claiming that Kaggle itself exposes
+the notebook's HTTP port publicly.
+
 For a genuinely unattended worker, a provider adapter must own:
 
 1. discover;
