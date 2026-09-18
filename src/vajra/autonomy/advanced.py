@@ -53,12 +53,15 @@ class CrossRepositoryOperation:
     intent_id: str
     repository_ids: tuple[str, ...]
     reason: str
+    operations: frozenset[str] = frozenset()
 
     def __post_init__(self) -> None:
         if not self.operation_id.strip() or not self.intent_id.strip() or not self.reason.strip():
             raise ValueError("cross-repository operation identity and reason are required")
         if not self.repository_ids:
             raise ValueError("cross-repository operation must name repositories")
+        if not self.operations:
+            raise ValueError("cross-repository operation must name requested operations")
 
 
 @dataclass(frozen=True)
@@ -238,6 +241,11 @@ class AdvancedAutonomyEngine:
             raise AdvancedAutonomyError(f"cross-repository operation names unauthorized repositories: {sorted(missing)}")
         if len(operation.repository_ids) > 1 and len(set(operation.repository_ids)) != len(operation.repository_ids):
             raise AdvancedAutonomyError("cross-repository operation contains duplicate repository identities")
+        for repository_id in operation.repository_ids:
+            if not operation.operations.issubset(authorities[repository_id].allowed_operations):
+                raise AdvancedAutonomyError(
+                    f"cross-repository operation requests unauthorized operations for {repository_id}"
+                )
 
     def next_stages(self, objective: MultiStepObjective) -> tuple[AdvancedStage, ...]:
         self.validate(objective)
