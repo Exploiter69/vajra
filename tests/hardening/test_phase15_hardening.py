@@ -16,6 +16,7 @@ from vajra.hardening import (
     ResourceGovernor,
     ResourceLimits,
     SecurityPolicy,
+    WorkerAuthenticator,
 )
 
 
@@ -121,3 +122,12 @@ def test_observability_answers_run_questions():
     assert explanation["failures"] == ["test failed"]
     assert explanation["recoveries"] == ["test failed"]
     assert explanation["evidence"] == [["e1"]]
+
+
+def test_worker_authentication_is_attempt_bound_and_expires():
+    auth = WorkerAuthenticator(b"x" * 32, clock=lambda: 100)
+    proof = auth.issue("worker-1", "attempt-1", "nonce", ttl_seconds=10)
+    assert auth.verify(proof, expected_worker_id="worker-1", expected_attempt_id="attempt-1", now=105)
+    assert not auth.verify(proof, expected_worker_id="worker-2", expected_attempt_id="attempt-1", now=105)
+    assert not auth.verify(proof, expected_worker_id="worker-1", expected_attempt_id="attempt-2", now=105)
+    assert not auth.verify(proof, expected_worker_id="worker-1", expected_attempt_id="attempt-1", now=111)
