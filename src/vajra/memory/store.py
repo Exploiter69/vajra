@@ -39,8 +39,14 @@ class JsonlMemoryStore(MemoryStore):
                 if not line.strip():
                     continue
                 try:
-                    record = MemoryRecord.from_payload(json.loads(line))
-                except (ValueError, KeyError, TypeError, json.JSONDecodeError) as exc:
+                    payload = json.loads(line)
+                    MemoryRecord.from_payload(payload)
+                    record = MemoryRecord.from_payload(payload)
+                except ValueError as exc:
+                    if "digest mismatch" in str(exc):
+                        raise
+                    raise ValueError(f"invalid memory journal record at line {line_no}: {exc}") from exc
+                except (KeyError, TypeError, json.JSONDecodeError) as exc:
                     raise ValueError(f"invalid memory journal record at line {line_no}") from exc
                 if record.memory_id in self._records:
                     raise ValueError(f"duplicate memory id: {record.memory_id}")
