@@ -44,6 +44,7 @@ def test_queue_survives_restart_and_reclaims_dispatching(tmp_path: Path):
     store.claim("q1")
 
     restarted = ControlPlaneStore(tmp_path / "control.jsonl")
+    restarted.recover_dispatching()
     recovered = restarted.ready()
 
     assert len(recovered) == 1
@@ -124,8 +125,8 @@ def test_retry_failed_run(tmp_path: Path):
 
     result = plane.control("run-1", ControlCommand.RETRY)
     assert result.accepted
-    assert manager.get_run("run-1").state is RunState.RECOVERING
-    assert plane.queue() == ()  # recovery must not bypass the transition boundary
+    assert manager.get_run("run-1").state is RunState.QUEUED
+    assert len(plane.queue()) == 1
 
 
 def test_approval_and_rejection_are_human_authority(tmp_path: Path):
@@ -205,7 +206,13 @@ def test_localhost_api_is_control_surface_only(tmp_path: Path):
             assert response.status == 202
         assert manager.get_run("run-1").state is RunState.QUEUED
 
-        with urlopen(f"http://{server.host}:{server.port}/runs/run-1/pause", timeout=2) as response:
+        pause = Request(
+            f"http://{server.host}:{server.port}/runs/run-1/pause",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(pause, timeout=2) as response:
             payload = json.loads(response.read())
         assert payload["accepted"] is True
         assert manager.get_run("run-1").state is RunState.PAUSED

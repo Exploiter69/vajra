@@ -57,8 +57,8 @@ class ControlPlaneHTTPServer:
             def do_POST(self) -> None:
                 path = [unquote(p) for p in urlparse(self.path).path.split("/") if p]
                 try:
-                    if len(path) == 2 and path[0] == "runs" and path[1] == "submit":
-                        self._send(202, {"entry_id": plane.submit(self._body()["run_id"])})
+                    if len(path) == 3 and path[0] == "runs" and path[2] == "submit":
+                        self._send(202, {"entry_id": plane.submit(path[1])})
                         return
                     if len(path) == 3 and path[0] == "runs" and path[2] in {c.value for c in ControlCommand}:
                         result = plane.control(path[1], ControlCommand(path[2]))
