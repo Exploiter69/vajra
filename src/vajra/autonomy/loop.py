@@ -167,7 +167,8 @@ class AutonomousEngineeringLoop:
                     continue
                 if self._execute_intent(run, self._plan.intents[self._intent_cursor]):
                     self._intent_cursor += 1
-                    self.run_manager.transition(run_id, RunState.VERIFYING, TransitionActor.CONTROLLER, reason="execution completed; independent verification required")
+                    if self._intent_cursor >= len(self._plan.intents):
+                        self.run_manager.transition(run_id, RunState.VERIFYING, TransitionActor.CONTROLLER, reason="all plan intents completed; independent verification required")
                 continue
             if run.state is RunState.VERIFYING:
                 if self._verify(run):
