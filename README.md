@@ -6,7 +6,7 @@ VAJRA is not a chatbot, LLM wrapper, IDE, single autonomous agent, Telegram bot,
 
 ## Current Status
 
-**Phase 16 — Advanced Autonomy: IMPLEMENTED / GATE PENDING.**
+**Phase 17 — Controlled Self-Improvement: IMPLEMENTED / GATE PENDING.**
 
 Phases 6–9 established the durable execution substrate, autonomous control/truth boundaries, engineering context/workspaces, and independent verification/anti-gaming. Phase 10 established the bounded autonomous objective-to-evidence loop. Phase 11 validated durability and chaos behavior. Phase 12 added capability-aware model/worker routing. Phase 13 added the always-on control plane. Phase 14 adds provenance-bound memory without making history authoritative.
 
@@ -97,11 +97,19 @@ Phase 11 validates unattended durability under failure with kill/recovery harnes
 - docs/PHASE_15_GATE_RESULT.md — Phase 15 gate result
 - docs/PHASE_16_IMPLEMENTATION.md — Phase 16 implementation and roadmap mapping
 - docs/PHASE_16_GATE_RESULT.md — Phase 16 gate result
+- docs/PHASE_17_IMPLEMENTATION.md — Phase 17 implementation and roadmap mapping
+- docs/PHASE_17_GATE_RESULT.md — Phase 17 gate result
 
 ## Frozen Baseline
 
 v0.1.0 / fb3cca5 remains the immutable Phase 6 baseline. Later work proceeds on main without rewriting or retagging that baseline.
 
+
+## Phase 17 implementation
+
+Phase 17 implements the roadmap's Controlled Self-Improvement boundary. Bounded heuristic areas may be proposed for routing, recovery, context ranking, failure classification, memory strategies, scheduling, and worker selection, but authority/security surfaces are permanently outside the self-improvement scope.
+
+The lifecycle is proposal → isolated branch → tests → independent verification → security verification → human approval → explicit promotion. Proposal state is durable in an append-only fsync-backed journal. The model can propose a change but cannot authorize, promote, modify protected authority, or restart VAJRA itself.
 
 ## Phase 16 implementation
 
