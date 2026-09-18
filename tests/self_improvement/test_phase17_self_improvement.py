@@ -127,3 +127,55 @@ def test_rejection_is_durable(tmp_path: Path):
     engine.reject(p)
     resumed = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
     assert resumed.store.state("p1") is ProposalState.REJECTED
+
+
+def test_runtime_control_and_self_improvement_surfaces_are_protected(tmp_path: Path):
+    engine = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
+    for path in (
+        "src/vajra/autonomy/advanced.py",
+        "src/vajra/control_plane/plane.py",
+        "src/vajra/self_improvement/engine.py",
+        "src/vajra/runtime/lease.py",
+    ):
+        with pytest.raises(SelfImprovementError, match="protected"):
+            engine.propose(proposal((path,)))
+
+
+def test_promotion_callback_is_not_reached_without_human_gate(tmp_path: Path):
+    engine = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
+    p = proposal()
+    engine.propose(p)
+    engine.isolate(p, lambda *_: None)
+    engine.test(p, lambda _: True)
+    engine.verify(p, lambda _: True)
+    engine.security_verify(p, lambda _: True)
+    reached = []
+    with pytest.raises(SelfImprovementError):
+        engine.promote(p, PromotionDecision("p1", "human", "approval"), lambda _: reached.append(True))
+    assert reached == []
+    assert engine.store.state("p1") is ProposalState.SECURITY_VERIFIED
+
+
+def test_proposal_cannot_be_redefined_or_promoted_twice(tmp_path: Path):
+    engine = SelfImprovementEngine(SelfImprovementStore(tmp_path / "journal.jsonl"))
+    p = proposal()
+    engine.propose(p)
+    with pytest.raises(SelfImprovementError):
+        engine.propose(p)
+    engine.isolate(p, lambda *_: None)
+    engine.test(p, lambda _: True)
+    engine.verify(p, lambda _: True)
+    engine.security_verify(p, lambda _: True)
+    engine.request_human_approval(p)
+    engine.promote(p, PromotionDecision("p1", "human", "approval"), lambda _: None)
+    with pytest.raises(SelfImprovementError):
+        engine.promote(p, PromotionDecision("p1", "human", "approval"), lambda _: None)
+
+
+def test_journal_tampering_is_detected(tmp_path: Path):
+    path = tmp_path / "journal.jsonl"
+    engine = SelfImprovementEngine(SelfImprovementStore(path))
+    engine.propose(proposal())
+    path.write_text(path.read_text(encoding="utf-8") + '{" + "\"sequence\"" + ":99," + "\"proposal_id\"" + ":\"evil\"," + "\"state\"" + ":\"PROPOSED\"}\\n", encoding="utf-8")
+    with pytest.raises(SelfImprovementError, match="journal"):
+        SelfImprovementStore(path)
