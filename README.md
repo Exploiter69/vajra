@@ -43,7 +43,7 @@ Phase 14 deliberately does not introduce a vector database, embeddings, autonomo
 
 ## Phase 15 implementation
 
-Phase 15 adds production-hardening boundaries for hostile repositories, filesystem/symlink/TOCTOU checks, credentials and environment isolation, Git hooks, submodules, package lifecycle scripts, network policy, sandbox runtime/output limits, resource accounting, and durable audit observability. It preserves the existing Policy → Broker → Sandbox → Verification authority chain and adds no paid infrastructure.
+Phase 15 adds production-hardening boundaries for hostile repositories, filesystem/symlink/TOCTOU checks, credentials and environment isolation, Git hooks, submodules, package lifecycle scripts, network policy, sandbox runtime/output limits, resource accounting, attempt-bound worker authentication, and durable audit observability. It preserves the existing Policy → Broker → Sandbox → Verification authority chain and adds no paid infrastructure.
 
 ## Phase 13 implementation
 
