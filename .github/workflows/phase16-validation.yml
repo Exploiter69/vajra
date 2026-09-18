@@ -1,0 +1,26 @@
+name: VAJRA Phase 16 Validation
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  phase16:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install
+        run: python -m pip install -e .
+      - name: Phase 16 tests
+        run: PYTHONPATH=src pytest -q tests/autonomy/test_phase16_advanced.py
+      - name: Portable full suite
+        run: PYTHONPATH=src pytest -q -k 'not gvisor_integration'
+      - name: Compile
+        run: python -m compileall -q src tests
+      - name: Diff check
+        run: git diff --check
