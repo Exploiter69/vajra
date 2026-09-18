@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from threading import RLock\nfrom time import monotonic
+from threading import RLock
+from time import monotonic\nfrom time import monotonic
 from typing import Any, Callable
 
 from .contracts import EngineeringPlan
@@ -232,7 +233,15 @@ class AdvancedAutonomyEngine:
         if len(objective.stages) > self.limits.max_stages:
             raise AdvancedAutonomyError("objective exceeds maximum stage count")
 
-    def authorize_operation(self, objective: MultiStepObjective, operation: CrossRepositoryOperation) -> None:\n        authorities = {r.repository_id: r for r in objective.repositories}\n        missing = set(operation.repository_ids) - set(authorities)\n        if missing:\n            raise AdvancedAutonomyError(f\"cross-repository operation names unauthorized repositories: {sorted(missing)}\")\n        if len(operation.repository_ids) > 1 and len(set(operation.repository_ids)) != len(operation.repository_ids):\n            raise AdvancedAutonomyError(\"cross-repository operation contains duplicate repository identities\")\n\n    def next_stages(self, objective: MultiStepObjective) -> tuple[AdvancedStage, ...]:
+    def authorize_operation(self, objective: MultiStepObjective, operation: CrossRepositoryOperation) -> None:\n        authorities = {r.repository_id: r for r in objective.repositories}\n        missing = set(operation.repository_ids) - set(authorities)\n        if missing:\n            raise AdvancedAutonomyError(f\"cross-repository operation names unauthorized repositories: {sorted(missing)}\")\n        if len(operation.repository_ids) > 1 and len(set(operation.repository_ids)) != len(operation.repository_ids):\n            raise AdvancedAutonomyError(\"cross-repository operation contains duplicate repository identities\")\n\n    def authorize_operation(self, objective: MultiStepObjective, operation: CrossRepositoryOperation) -> None:
+        authorities = {r.repository_id: r for r in objective.repositories}
+        missing = set(operation.repository_ids) - set(authorities)
+        if missing:
+            raise AdvancedAutonomyError(f"cross-repository operation names unauthorized repositories: {sorted(missing)}")
+        if len(operation.repository_ids) > 1 and len(set(operation.repository_ids)) != len(operation.repository_ids):
+            raise AdvancedAutonomyError("cross-repository operation contains duplicate repository identities")
+
+    def next_stages(self, objective: MultiStepObjective) -> tuple[AdvancedStage, ...]:
         self.validate(objective)
         checkpoints = {c.stage_id: c for c in self.store.latest(objective.objective_id)}
         completed = {sid for sid, c in checkpoints.items() if c.state is StageState.COMPLETE}
@@ -256,7 +265,14 @@ class AdvancedAutonomyEngine:
         completed = {c.stage_id for c in self.store.latest(objective.objective_id) if c.state is StageState.COMPLETE}
         sequence = max((c.sequence for c in self.store.latest(objective.objective_id)), default=0) + 1
         replans = 0
+        attempts = 0
+        started = monotonic()
         for stage in objective.stages:
+            if monotonic() - started > self.limits.max_wall_clock_seconds:
+                raise AdvancedAutonomyError("long-horizon wall-clock bound exhausted")
+            attempts += 1
+            if attempts > self.limits.max_attempts:
+                raise AdvancedAutonomyError("long-horizon attempt bound exhausted")
             if stage.stage_id in completed:
                 continue
             if not all(dep in completed for dep in stage.depends_on):
