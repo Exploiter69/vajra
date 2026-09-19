@@ -71,6 +71,24 @@ def worker_ready() -> bool:
         return False
 
 
+def install_ollama() -> str:
+    target = "/kaggle/working/ollama"
+    binary = f"{target}/bin/ollama"
+    if os.path.isfile(binary) and os.access(binary, os.X_OK):
+        return binary
+
+    print("Ollama: not installed — installing once into /kaggle/working/ollama", flush=True)
+    installer = "/tmp/ollama-install.sh"
+    subprocess.run(
+        ["bash", "-lc", f"curl -fsSL https://ollama.com/install.sh -o {installer} && sh {installer}"],
+        check=True,
+    )
+    candidates = [binary, "/usr/local/bin/ollama", shutil.which("ollama")]
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    raise SystemExit("Ollama installation completed but no executable was found.")
+
 def find_ollama() -> str:
     configured = os.environ.get("VAJRA_OLLAMA_BIN")
     candidates = [
@@ -82,9 +100,7 @@ def find_ollama() -> str:
     for candidate in candidates:
         if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
             return candidate
-    raise SystemExit(
-        "Ollama is not installed. Run the one-time Kaggle bootstrap first."
-    )
+    return install_ollama()
 
 
 def start_ollama(ollama: str) -> None:
