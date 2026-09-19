@@ -163,3 +163,15 @@ def test_request_requires_run_id() -> None:
             to_state=RunState.QUEUED,
             actor=TransitionActor.SYSTEM,
         )
+
+
+def test_controller_can_recover_candidate_after_failed_acceptance() -> None:
+    authority = TransitionAuthority()
+    run = make_run(RunState.CANDIDATE)
+
+    authority.assert_authorized(
+        run,
+        RunState.RECOVERING,
+        TransitionActor.CONTROLLER,
+        reason="acceptance evaluation failed",
+    )
