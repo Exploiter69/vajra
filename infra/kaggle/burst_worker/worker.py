@@ -30,7 +30,13 @@ def _ollama_executable() -> str | None:
         str(ROOT / "ollama" / "bin" / "ollama"),
     ):
         probe = subprocess.run(
-            ("bash", "-lc", f"command -v {candidate}" if candidate == "ollama" else f"test -x {candidate}"),
+            (
+                "bash",
+                "-lc",
+                f"command -v {candidate}"
+                if candidate == "ollama"
+                else f"test -x {candidate}",
+            ),
             capture_output=True,
             text=True,
         )
@@ -56,23 +62,26 @@ def _install_ollama_user_local() -> str:
     except subprocess.CalledProcessError as exc:
         if exc.returncode != 2:
             raise
-        # Kaggle images do not guarantee the zstd CLI. Fall back to the
-        # small Python zstandard package so the worker remains rootless.
-        run((
-            "python",
-            "-m",
-            "pip",
-            "install",
-            "--disable-pip-version-check",
-            "--quiet",
-            "zstandard",
-        ))
+        run(
+            (
+                "python",
+                "-m",
+                "pip",
+                "install",
+                "--disable-pip-version-check",
+                "--quiet",
+                "zstandard",
+            )
+        )
+        archive_literal = repr(str(archive))
+        target_literal = repr(str(target))
         extractor = (
             "import tarfile,zstandard; "
             "d=zstandard.ZstdDecompressor(); "
-            "r=d.stream_reader(open("/kaggle/working/ollama-linux-amd64.tar.zst",'rb')); "
-            "t=tarfile.open(fileobj=r,mode='r|'); "
-            "t.extractall("/kaggle/working/ollama"); t.close(); r.close()"
+            f"r=d.stream_reader(open({archive_literal}, 'rb')); "
+            f"t=tarfile.open(fileobj=r, mode='r|'); "
+            f"t.extractall({target_literal}); "
+            "t.close(); r.close()"
         )
         run(("python", "-c", extractor))
     executable = target / "bin" / "ollama"
@@ -171,7 +180,11 @@ def main() -> int:
             "evidence_refs": [],
         }
 
-    envelope = {"protocol_version": PROTOCOL, "type": "worker_result", "result": result}
+    envelope = {
+        "protocol_version": PROTOCOL,
+        "type": "worker_result",
+        "result": result,
+    }
     RESULT_PATH.write_text(
         json.dumps(envelope, sort_keys=True, separators=(",", ":")),
         encoding="utf-8",
