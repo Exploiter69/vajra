@@ -25,7 +25,7 @@ class FakeKaggleResultTransport:
                     "intent_id": "b",
                     "operation": "WRITE_FILE",
                     "path": "test_calculator.py",
-                    "content": "def test_multiply():\n    assert multiply(6, 7) == 42\n",
+                    "content": "from calculator import multiply\n\n\ndef test_multiply():\n    assert multiply(6, 7) == 42\n",
                     "reason": "regression test",
                 },
             ],
