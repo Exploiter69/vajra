@@ -72,3 +72,39 @@ def test_run3_local_replay_preserves_kaggle_wire_shape():
         "calculator.py",
         "test_calculator.py",
     ]
+
+
+def test_run3_local_replay_completes_real_control_plane(tmp_path):
+    from scripts.third_engineering_run import build_loop, prepare_workspace
+
+    class Gateway:
+        def __init__(self):
+            identity = ModelIdentity(
+                "kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch"
+            )
+            self.adapter = TransportWorkerModelAdapter(
+                FakeKaggleResultTransport(), identity, timeout_seconds=1
+            )
+
+        def invoke(self, request, model_identity):
+            return self.adapter.invoke(request)
+
+    workspace = tmp_path / "project"
+    revision = prepare_workspace(workspace)
+    identity = ModelIdentity(
+        "kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch"
+    )
+    loop, manager = build_loop(
+        workspace, revision, Gateway(), identity, "run3-local-replay"
+    )
+
+    result = loop.run("run3-local-replay")
+    run = manager.get_run("run3-local-replay")
+
+    assert result.completed is True
+    assert run.state.value == "COMPLETE"
+    assert "def multiply" in (workspace / "calculator.py").read_text()
+    assert "multiply(6, 7) == 42" in (workspace / "test_calculator.py").read_text()
+    assert len(run.steps) == 2
+    assert len(run.verification_results) == 3
+    assert run.artifacts
