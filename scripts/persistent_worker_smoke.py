@@ -13,7 +13,7 @@ from vajra.runtime.worker_provider import HTTPWorkerProvider
 
 
 ENDPOINT = os.environ.get("VAJRA_KAGGLE_WORKER_URL")
-MODEL = os.environ.get("VAJRA_WORKER_MODEL", "qwen2.5-coder:32b")
+MODEL = os.environ.get("VAJRA_WORKER_MODEL", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M")
 
 
 def main() -> int:
