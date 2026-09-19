@@ -54,9 +54,9 @@ class GatewayReasoner:
             attempt_id=str(uuid4()), task=task,
             context={"revision": context.revision, "context_digest": context.digest},
             output_schema=schema,
-            budget=BudgetEnvelope(max_model_calls=1, max_worker_runtime_seconds=300,
+            budget=BudgetEnvelope(max_model_calls=1, max_worker_runtime_seconds=900,
                                   max_output_size=self.max_output_tokens * 4, max_cost_units=0),
-            deadline=(datetime.now(timezone.utc) + timedelta(seconds=300)).replace(microsecond=0).isoformat(),
+            deadline=(datetime.now(timezone.utc) + timedelta(seconds=900)).replace(microsecond=0).isoformat(),
             model=self.model_identity, strategy_id="qwen-" + phase,
         )
         result = self.gateway.invoke(request, self.model_identity)
