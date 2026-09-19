@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from vajra.runtime.kaggle_worker_server import infer
+from vajra.runtime.kaggle_worker_server import MODEL, infer
 from vajra.runtime.worker_protocol import WorkerJob
 
 
@@ -68,7 +68,7 @@ def test_infer_preserves_job_correlation(monkeypatch):
     assert result.status == "completed"
     assert result.correlation_id == "corr-1"
     assert result.structured_result["response"] == "hello"
-    assert result.structured_result["model"] == "qwen2.5-coder:32b"
+    assert result.structured_result["model"] == MODEL
     assert result.usage["eval_count"] == 4
     assert not result.errors
 
