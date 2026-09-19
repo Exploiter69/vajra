@@ -52,7 +52,7 @@ class KaggleKernelLauncher:
             ]
         )
 
-    def output(self, destination: Path, *, force: bool = True) -> None:
+    def output(self, destination: Path, *, force: bool = True, file_pattern: str | None = None) -> None:
         """Download the latest saved kernel output without opening Kaggle UI."""
         if not self.kernel_ref:
             raise KaggleLifecycleError("kernel_ref is required for output")
@@ -65,6 +65,8 @@ class KaggleKernelLauncher:
             "-p",
             str(destination),
         ]
+        if file_pattern:
+            command.extend(["--file-pattern", file_pattern])
         if force:
             command.append("--force")
         self._run(command)
