@@ -125,9 +125,8 @@ def test_kaggle_kernel_output_is_headless(monkeypatch, tmp_path):
         kernel_ref="owner/worker",
     )
     monkeypatch.setattr(
-        launcher,
-        "_run",
-        lambda command, **kwargs: calls.append((tuple(command), kwargs)),
+        "vajra.runtime.kaggle_lifecycle.KaggleKernelLauncher._run",
+        lambda self, command, **kwargs: calls.append((tuple(command), kwargs)),
     )
     launcher.output(tmp_path / "out")
     command, kwargs = calls[-1]
