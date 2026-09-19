@@ -157,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(
                 200,
                 {
-                    "worker": "vajra-kaggle-worker",
+                    "worker": WORKER_ID,
                     "protocol": adapter.protocol_version,
                     "runtime": "ollama",
                     "model": MODEL,
