@@ -52,7 +52,7 @@ def test_batch_transport_pushes_polls_downloads_and_decodes(monkeypatch, tmp_pat
     class FakeLauncher:
         def __init__(self, kernel_path, **kwargs):
             self.kernel_path = kernel_path
-            calls.append(("init", kwargs))
+            calls.append(("init", kernel_path, kwargs))
 
         def start(self):
             calls.append(("start",))
