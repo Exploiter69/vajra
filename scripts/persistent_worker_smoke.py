@@ -7,7 +7,7 @@ import os
 import sys
 from datetime import datetime, timezone
 
-from vajra.routing.contracts import ModelIdentity, ModelRequest, ModelUsage
+from vajra.routing.contracts import BudgetEnvelope, ModelIdentity, ModelRequest
 from vajra.runtime.remote_model import RemoteWorkerModelAdapter
 from vajra.runtime.worker_provider import HTTPWorkerProvider
 
@@ -52,13 +52,14 @@ def main() -> int:
             request_id=f"persistent-worker-smoke-{index}",
             run_id="persistent-worker-smoke",
             step_id=f"step-{index}",
+            attempt_id=f"attempt-{index}",
             task=prompt,
             context={"revision": "smoke"},
             deadline=datetime.now(timezone.utc).replace(
                 microsecond=0
             ).isoformat(),
             output_schema={"type": "object"},
-            budget=ModelUsage(max_output_size=512),
+            budget=BudgetEnvelope(max_output_size=512, max_worker_runtime_seconds=180),
         )
         result = adapter.invoke(request)
         print(f"request_{index}: {result.status}")
