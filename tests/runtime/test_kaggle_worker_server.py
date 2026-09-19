@@ -87,3 +87,17 @@ def test_infer_failure_preserves_job_correlation(monkeypatch):
     assert result.status == "failed"
     assert result.correlation_id == "corr-1"
     assert "TimeoutError" in result.errors[0]
+
+
+def test_worker_ready_requires_model(monkeypatch):
+    monkeypatch.setattr(
+        "vajra.runtime.kaggle_worker_server.ollama_health",
+        lambda: True,
+    )
+    monkeypatch.setattr(
+        "vajra.runtime.kaggle_worker_server.model_available",
+        lambda: False,
+    )
+    from vajra.runtime.kaggle_worker_server import worker_ready
+
+    assert not worker_ready()
