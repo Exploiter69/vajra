@@ -30,7 +30,16 @@ class GatewayReasoner:
             + ". Acceptance: " + repr(list(context.acceptance_criteria)),
             {"type": "object", "required": ["orientation"]},
         )
-        value = result.structured_output.get("orientation")
+        payload = result.structured_output
+        value = payload.get("orientation") if isinstance(payload, dict) else None
+        if not isinstance(value, str) or not value.strip():
+            raw = payload.get("response") if isinstance(payload, dict) else None
+            if isinstance(raw, str):
+                try:
+                    parsed = self._parse_json_response(raw)
+                except (TypeError, ValueError, json.JSONDecodeError) as exc:
+                    raise ModelProposalError("model orientation response is not valid JSON") from exc
+                value = parsed.get("orientation") if isinstance(parsed, dict) else None
         if not isinstance(value, str) or not value.strip():
             raise ModelProposalError("model returned no orientation")
         return value.strip()
@@ -64,6 +73,17 @@ class GatewayReasoner:
             raise ModelProposalError("; ".join(result.errors) or "remote model failed")
         return result
 
+    @staticmethod
+    def _parse_json_response(raw: str) -> dict:
+        text = raw.strip()
+        if text.startswith("```") and text.endswith("```"):
+            lines = text.splitlines()
+            text = "\n".join(lines[1:-1]).strip()
+        payload = json.loads(text)
+        if not isinstance(payload, dict):
+            raise ValueError("model response is not a JSON object")
+        return payload
+
     def _plan_prompt(self, context: ContextBundle, orientation: str) -> str:
         return (
             "You are VAJRA's proposal-only reasoning component. The controller, policy engine, "
@@ -87,7 +107,7 @@ class GatewayReasoner:
                 lines = lines[1:]
             if lines and lines[-1].strip().startswith(chr(96)):
                 lines = lines[:-1]
-            payload = json.loads("\n".join(lines).strip())
+            payload = self._parse_json_response("\n".join(lines).strip())
         if not isinstance(payload, dict):
             raise ModelProposalError("model plan is not a JSON object")
 
