@@ -48,6 +48,7 @@ def encoded_result(correlation_id="corr-1"):
 
 def test_batch_transport_pushes_polls_downloads_and_decodes(monkeypatch, tmp_path):
     calls = []
+    uploaded_worker_source = None
 
     class FakeLauncher:
         def __init__(self, kernel_path, **kwargs):
@@ -55,6 +56,8 @@ def test_batch_transport_pushes_polls_downloads_and_decodes(monkeypatch, tmp_pat
             calls.append(("init", kernel_path, kwargs))
 
         def start(self):
+            nonlocal uploaded_worker_source
+            uploaded_worker_source = (self.kernel_path / "worker.py").read_text(encoding="utf-8")
             calls.append(("start",))
 
         def status(self):
@@ -72,10 +75,9 @@ def test_batch_transport_pushes_polls_downloads_and_decodes(monkeypatch, tmp_pat
 
     assert result.status == "completed"
     assert result.correlation_id == "corr-1"
-    kernel_path = next(x[1] for x in calls if x[0] == "init")
-    worker_source = (kernel_path / "worker.py").read_text(encoding="utf-8")
-    assert "EMBEDDED_JOB_JSON: str | None = '" in worker_source
-    assert "return JSON" in worker_source
+    assert uploaded_worker_source is not None
+    assert "EMBEDDED_JOB_JSON: str | None = '" in uploaded_worker_source
+    assert "return JSON" in uploaded_worker_source
     assert [x[0] for x in calls] == ["init", "start", "status", "status", "output"]
 
 
