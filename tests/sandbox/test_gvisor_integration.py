@@ -125,19 +125,26 @@ def test_gvisor_applies_resource_limits(
 ) -> None:
     captured: list[str] = []
 
-    class Completed:
-        returncode = 0
-        stdout = "resource-limit-test"
-        stderr = ""
-
-    def fake_run(command: list[str], **kwargs: object) -> Completed:
+    def fake_run_limited(
+        command: list[str],
+        *,
+        timeout: float | None,
+        output_limit: int | None,
+    ) -> dict[str, object]:
         captured.extend(command)
-        assert kwargs["shell"] is False
-        return Completed()
+        return {
+            "return_code": 0,
+            "stdout": "resource-limit-test",
+            "stderr": "",
+            "timed_out": False,
+            "output_exceeded": False,
+            "output_bytes": 20,
+        }
 
     monkeypatch.setattr(
-        "vajra.sandbox.gvisor.subprocess.run",
-        fake_run,
+        GVisorSandbox,
+        "_run_limited",
+        staticmethod(fake_run_limited),
     )
 
     sandbox = GVisorSandbox()
