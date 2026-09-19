@@ -121,7 +121,7 @@ def main() -> int:
     parser.add_argument("--kernel-ref", default=os.environ.get("VAJRA_KAGGLE_KERNEL_REF", ""))
     args = parser.parse_args()
 
-    identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "http-worker")
+    identity = ModelIdentity("kaggle", os.environ.get("VAJRA_WORKER_MODEL", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M"), "llama.cpp", "http-worker")
     endpoint = None
     if args.kaggle_batch:
         template = args.kernel_template.expanduser().resolve()
