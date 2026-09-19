@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.request import Request, urlopen
@@ -9,10 +10,11 @@ from vajra.runtime.kaggle_worker import KaggleWorkerAdapter
 from vajra.runtime.worker_protocol import WorkerJob, WorkerResult
 
 
-HOST = "127.0.0.1"
-PORT = 8787
-OLLAMA_API = "http://127.0.0.1:11434"
-MODEL = "qwen2.5-coder:32b"
+HOST = os.environ.get("VAJRA_WORKER_HOST", "127.0.0.1")
+PORT = int(os.environ.get("VAJRA_WORKER_PORT", "8787"))
+OLLAMA_API = os.environ.get("VAJRA_OLLAMA_URL", "http://127.0.0.1:11434").rstrip("/")
+MODEL = os.environ.get("VAJRA_WORKER_MODEL", "qwen2.5-coder:32b")
+WORKER_ID = os.environ.get("VAJRA_WORKER_ID", "vajra-kaggle-worker")
 
 adapter = KaggleWorkerAdapter()
 
@@ -28,6 +30,25 @@ def ollama_health() -> bool:
             )
     except Exception:
         return False
+
+
+def model_available() -> bool:
+    try:
+        request = Request(f"{OLLAMA_API}/api/tags", method="GET")
+        with urlopen(request, timeout=5) as response:
+            if response.status != 200:
+                return False
+            payload = json.loads(response.read().decode())
+        return any(
+            str(item.get("name", "")) == MODEL
+            for item in payload.get("models", [])
+        )
+    except Exception:
+        return False
+
+
+def worker_ready() -> bool:
+    return ollama_health() and model_available()
 
 
 def infer(job: WorkerJob) -> WorkerResult:
@@ -118,14 +139,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            healthy = ollama_health()
+            healthy = worker_ready()
             self._send(
                 200 if healthy else 503,
                 {
                     "status": "ok" if healthy else "unhealthy",
-                    "worker": "vajra-kaggle-worker",
+                    "worker": WORKER_ID,
                     "protocol": adapter.protocol_version,
                     "model": MODEL,
+                    "ollama": ollama_health(),
+                    "model_available": model_available(),
                 },
             )
             return
@@ -184,7 +207,7 @@ class Handler(BaseHTTPRequestHandler):
 def serve() -> None:
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     server.daemon_threads = True
-    print(f"VAJRA Kaggle worker listening on http://{HOST}:{PORT}")
+    print(f"VAJRA worker listening on http://{HOST}:{PORT}")
     server.serve_forever()
 
 
