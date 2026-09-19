@@ -15,7 +15,7 @@ ALLOWED_TRANSITIONS: dict[RunState, frozenset[RunState]] = {
     RunState.ORIENTING: frozenset({RunState.PLANNING, RunState.RECOVERING, RunState.WAITING_HUMAN, RunState.PAUSED}),
     RunState.PLANNING: frozenset({RunState.EXECUTING, RunState.RECOVERING, RunState.WAITING_HUMAN, RunState.PAUSED}),
     RunState.EXECUTING: frozenset({RunState.VERIFYING, RunState.RECOVERING, RunState.WAITING_HUMAN, RunState.FAILED, RunState.PAUSED}),
-    RunState.VERIFYING: frozenset({RunState.CANDIDATE, RunState.RECOVERING, RunState.FAILED, RunState.PAUSED}),
+    RunState.VERIFYING: frozenset({RunState.CANDIDATE, RunState.RECOVERING, RunState.FAILED, RunState.WAITING_HUMAN, RunState.PAUSED}),
     RunState.CANDIDATE: frozenset({RunState.PROMOTION, RunState.FAILED, RunState.RECOVERING, RunState.WAITING_HUMAN, RunState.PAUSED}),
     RunState.PROMOTION: frozenset({RunState.COMPLETE, RunState.FAILED, RunState.WAITING_HUMAN, RunState.PAUSED}),
     RunState.RECOVERING: frozenset({RunState.QUEUED, RunState.ORIENTING, RunState.PLANNING, RunState.EXECUTING, RunState.VERIFYING, RunState.FAILED, RunState.WAITING_HUMAN, RunState.ABORTED, RunState.PAUSED}),
