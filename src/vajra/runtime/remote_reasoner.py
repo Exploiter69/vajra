@@ -19,8 +19,36 @@ class GatewayReasoner:
     gateway: object
     model_identity: str
     max_output_tokens: int = 1200
+    single_call_plan: bool = False
+    _cached_plan: EngineeringPlan | None = None
+    _cached_plan_context_digest: str | None = None
 
     def orient(self, context: ContextBundle) -> str:
+        if self.single_call_plan:
+            result = self._invoke(
+                context,
+                "orientation-plan",
+                self._combined_prompt(context),
+                {"type": "object", "required": ["orientation", "plan_id", "strategy_id", "intents"]},
+            )
+            payload = result.structured_output
+            raw = payload.get("response") if isinstance(payload, dict) else None
+            if isinstance(raw, str):
+                payload = self._parse_json_response(raw)
+                result = ModelResult(
+                    status=result.status,
+                    structured_output=payload,
+                    usage=result.usage,
+                    model_identity=result.model_identity,
+                    errors=result.errors,
+                )
+            value = payload.get("orientation") if isinstance(payload, dict) else None
+            if not isinstance(value, str) or not value.strip():
+                raise ModelProposalError("model returned no orientation")
+            self._cached_plan = self._parse_plan(result, context)
+            self._cached_plan_context_digest = context.digest
+            return value.strip()
+
         result = self._invoke(
             context,
             "orientation",
@@ -45,6 +73,11 @@ class GatewayReasoner:
         return value.strip()
 
     def plan(self, context: ContextBundle, orientation: str) -> EngineeringPlan:
+        if self.single_call_plan and self._cached_plan_context_digest == context.digest and self._cached_plan is not None:
+            plan = self._cached_plan
+            self._cached_plan = None
+            self._cached_plan_context_digest = None
+            return plan
         result = self._invoke(context, "plan", self._plan_prompt(context, orientation),
                               {"type": "object", "required": ["plan_id", "strategy_id", "intents"]})
         return self._parse_plan(result, context)
@@ -83,6 +116,20 @@ class GatewayReasoner:
         if not isinstance(payload, dict):
             raise ValueError("model response is not a JSON object")
         return payload
+
+    def _combined_prompt(self, context: ContextBundle) -> str:
+        return (
+            "You are VAJRA's proposal-only reasoning component. The controller, policy engine, "
+            "execution broker and independent verifier are authoritative. Do not claim execution or verification. "
+            "Produce ONE JSON object containing both an orientation string and a complete bounded plan.\n"
+            "OBJECTIVE: " + context.query
+            + "\nRELEVANT FILES: " + repr(list(context.relevant_files))
+            + "\nACCEPTANCE: " + repr(list(context.acceptance_criteria))
+            + "\nThe plan must use WRITE_FILE only, paths calculator.py and test_calculator.py only, "
+            "and each intent must contain COMPLETE file content. No shell commands, absolute paths, git operations, "
+            "or extra fields. Return JSON only with orientation, plan_id, strategy_id, and intents containing "
+            "intent_id, operation, path, content, reason."
+        )
 
     def _plan_prompt(self, context: ContextBundle, orientation: str) -> str:
         return (
