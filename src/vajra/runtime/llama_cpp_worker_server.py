@@ -12,7 +12,7 @@ from vajra.runtime.worker_protocol import WorkerJob, WorkerResult
 HOST = os.environ.get("VAJRA_WORKER_HOST", "127.0.0.1")
 PORT = int(os.environ.get("VAJRA_WORKER_PORT", "8787"))
 LLAMA_API = os.environ.get("VAJRA_LLAMA_URL", "http://127.0.0.1:8000").rstrip("/")
-MODEL = os.environ.get("VAJRA_WORKER_MODEL", "qwen2.5-coder-32b")
+MODEL = os.environ.get("VAJRA_WORKER_MODEL", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M")
 WORKER_ID = os.environ.get("VAJRA_WORKER_ID", "kaggle-t4-llama-cpp-01")
 adapter = KaggleWorkerAdapter()
 
