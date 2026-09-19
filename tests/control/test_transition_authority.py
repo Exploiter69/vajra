@@ -175,3 +175,15 @@ def test_controller_can_recover_candidate_after_failed_acceptance() -> None:
         TransitionActor.CONTROLLER,
         reason="acceptance evaluation failed",
     )
+
+
+def test_controller_can_escalate_verification_to_human() -> None:
+    authority = TransitionAuthority()
+    run = make_run(RunState.VERIFYING)
+
+    authority.assert_authorized(
+        run,
+        RunState.WAITING_HUMAN,
+        TransitionActor.CONTROLLER,
+        reason="strategy loop threshold reached",
+    )
