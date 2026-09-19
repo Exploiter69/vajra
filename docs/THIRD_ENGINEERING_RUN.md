@@ -109,6 +109,17 @@ A provider adapter may automate lifecycle when the provider exposes a stable
 programmatic mechanism for the required runtime and endpoint. The adapter must
 not depend on browser clicking as the core VAJRA control-plane mechanism.
 
+## Reusing a live worker
+
+For a long-lived runtime, use `scripts/start_kaggle_http_worker.py` to start
+the VAJRA HTTP worker. It checks Ollama and the exact configured model before
+pulling anything, so repeated runs against the same runtime reuse the installed
+model.
+
+The HTTP worker's `/health` endpoint now reports READY only when both Ollama
+and the configured model are available. A Kaggle runtime remains ephemeral;
+this does not imply persistence across runtime destruction.
+
 ## Run command
 
 After the worker endpoint is genuinely ready:
