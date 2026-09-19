@@ -85,7 +85,7 @@ class KaggleBatchWorkerTransport:
                 launcher.start()
                 self._wait_for_completion(launcher, deadline)
                 output_dir = Path(temp) / "output"
-                launcher.output(output_dir)
+                launcher.output(output_dir, file_pattern="worker_result.json")
                 result_path = output_dir / "worker_result.json"
                 if not result_path.is_file():
                     raise KaggleBatchWorkerError(
