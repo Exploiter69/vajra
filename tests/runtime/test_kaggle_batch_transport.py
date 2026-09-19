@@ -61,7 +61,7 @@ def test_batch_transport_pushes_polls_downloads_and_decodes(monkeypatch, tmp_pat
             calls.append(("status",))
             return "running" if len([x for x in calls if x[0] == "status"]) == 1 else "complete"
 
-        def output(self, destination):
+        def output(self, destination, **kwargs):
             calls.append(("output",))
             destination.mkdir(parents=True)
             (destination / "worker_result.json").write_text(encoded_result(), encoding="utf-8")
@@ -87,7 +87,7 @@ def test_batch_transport_rejects_failed_kernel(monkeypatch, tmp_path):
             pass
         def status(self):
             return "failed"
-        def output(self, destination):
+        def output(self, destination, **kwargs):
             raise AssertionError("output must not run")
 
     monkeypatch.setattr("vajra.runtime.kaggle_batch_transport.KaggleKernelLauncher", FakeLauncher)
@@ -103,7 +103,7 @@ def test_batch_transport_rejects_missing_result(monkeypatch, tmp_path):
             pass
         def status(self):
             return "complete"
-        def output(self, destination):
+        def output(self, destination, **kwargs):
             destination.mkdir(parents=True)
 
     monkeypatch.setattr("vajra.runtime.kaggle_batch_transport.KaggleKernelLauncher", FakeLauncher)
@@ -119,7 +119,7 @@ def test_batch_transport_rejects_wrong_correlation(monkeypatch, tmp_path):
             pass
         def status(self):
             return "complete"
-        def output(self, destination):
+        def output(self, destination, **kwargs):
             destination.mkdir(parents=True)
             (destination / "worker_result.json").write_text(
                 encoded_result("wrong"), encoding="utf-8"
