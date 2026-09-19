@@ -97,13 +97,13 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         run_manager=manager, state_store=state, event_store=events, context_engine=ContextEngine(),
         controller=Controller(), policy=policy, broker=ExecutionBroker(ProjectFileBackend()),
         verifier=IndependentVerifier(SubprocessVerificationExecutor()),
-        reasoning=GatewayReasoner(gateway, model_identity.canonical),
+        reasoning=GatewayReasoner(gateway, model_identity.canonical, single_call_plan=True),
         acceptance=criteria, verification_plan=plan,
         verification_environment=VerificationEnvironment(
             workspace=workspace.resolve(), network_enabled=True, sandbox_id=None,
             environment=(("PYTHONPATH", str(workspace.resolve())), ("PYTHONDONTWRITEBYTECODE", "1"))),
         workspace=WorkspaceRuntime(workspace.resolve(), "vajra-run-3-workspace", "vajra-run-3-repo", revision),
-        budget=Budget("vajra-run-3-budget", 600, 20, 20, 20, 40, 4_000_000, 600),
+        budget=Budget("vajra-run-3-budget", 2400, 20, 20, 20, 40, 4_000_000, 2400),
         bounded_autonomy=BoundedAutonomy(), max_cycles=32)
     return loop, manager
 
