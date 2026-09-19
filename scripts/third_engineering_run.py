@@ -30,6 +30,9 @@ from vajra.verification.plan import AcceptanceCriteriaCompiler
 
 
 class ProjectFileBackend:
+    def __init__(self, workspace: Path):
+        self.workspace = workspace
+
     def execute(self, request):
         if request.intent.operation != "WRITE_FILE":
             return ExecutionResult(status=ExecutionStatus.REJECTED, operation=request.intent.operation,
@@ -38,7 +41,7 @@ class ProjectFileBackend:
         if path not in {"calculator.py", "test_calculator.py"}:
             return ExecutionResult(status=ExecutionStatus.REJECTED, operation=request.intent.operation,
                                    errors=("run-3 backend rejected path",))
-        target = Path(request.intent.parameters["workspace"]) / path
+        target = self.workspace / path
         target.write_text(request.intent.parameters["content"], encoding="utf-8")
         return ExecutionResult(status=ExecutionStatus.ACCEPTED, operation=request.intent.operation)
 
@@ -95,7 +98,7 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         PolicyRule("promote", "PROMOTE_RUN", PolicyDecisionType.ALLOW, "independent tests passed")))
     loop = AutonomousEngineeringLoop(
         run_manager=manager, state_store=state, event_store=events, context_engine=ContextEngine(),
-        controller=Controller(), policy=policy, broker=ExecutionBroker(ProjectFileBackend()),
+        controller=Controller(), policy=policy, broker=ExecutionBroker(ProjectFileBackend(workspace)),
         verifier=IndependentVerifier(SubprocessVerificationExecutor()),
         reasoning=GatewayReasoner(gateway, model_identity.canonical, single_call_plan=True),
         acceptance=criteria, verification_plan=plan,
