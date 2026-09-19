@@ -51,7 +51,30 @@ def _install_ollama_user_local() -> str:
             f"-o {archive}",
         )
     )
-    run(("tar", "--zstd", "-xf", str(archive), "-C", str(target)))
+    try:
+        run(("tar", "--zstd", "-xf", str(archive), "-C", str(target)))
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode != 2:
+            raise
+        # Kaggle images do not guarantee the zstd CLI. Fall back to the
+        # small Python zstandard package so the worker remains rootless.
+        run((
+            "python",
+            "-m",
+            "pip",
+            "install",
+            "--disable-pip-version-check",
+            "--quiet",
+            "zstandard",
+        ))
+        extractor = (
+            "import tarfile,zstandard; "
+            "d=zstandard.ZstdDecompressor(); "
+            "r=d.stream_reader(open("/kaggle/working/ollama-linux-amd64.tar.zst",'rb')); "
+            "t=tarfile.open(fileobj=r,mode='r|'); "
+            "t.extractall("/kaggle/working/ollama"); t.close(); r.close()"
+        )
+        run(("python", "-c", extractor))
     executable = target / "bin" / "ollama"
     if not executable.is_file():
         raise RuntimeError(f"Ollama archive did not contain {executable}")
