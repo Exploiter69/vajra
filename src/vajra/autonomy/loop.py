@@ -57,7 +57,23 @@ class _RunStateRecorder:
             run.verification_results.extend(results)
             try:
                 self._state.save_run(run)
-                self._append(run_id, "VERIFICATION_RECORDED", {"verification_ids": [r.verification_id for r in results], "evidence_ids": [e.evidence_ref.evidence_id for e in evidence], "verifier_versions": sorted({r.verifier_version for r in results})})
+                self._append(run_id, "VERIFICATION_RECORDED", {
+                    "verification_ids": [r.verification_id for r in results],
+                    "evidence_ids": [e.evidence_ref.evidence_id for e in evidence],
+                    "verifier_versions": sorted({r.verifier_version for r in results}),
+                    "checks": [
+                        {
+                            "check_id": item.check_id,
+                            "command": list(item.command),
+                            "status": item.status,
+                            "exit_code": item.exit_code,
+                            "output_digest": item.output_digest,
+                            "output_excerpt": item.output_excerpt,
+                            "environment": item.environment,
+                        }
+                        for item in evidence
+                    ],
+                })
             except Exception:
                 self._state.save_run(previous)
                 raise
@@ -119,6 +135,8 @@ class AutonomousEngineeringLoop:
         self._last_evidence: tuple = ()
         self._progress: list[ProgressMeasurement] = []
         self._previous_workspace_digest = self._workspace_digest()
+        self._last_failed_command_signature: str | None = None
+        self._repeated_failed_command_count = 0
 
     def run(self, run_id: str) -> LoopResult:
         for cycle in range(1, self._max_cycles + 1):
@@ -268,6 +286,22 @@ class AutonomousEngineeringLoop:
         attempt_id = self._current_attempt_id(run)
         self._emit(LoopPhase.VERIFY, run.run_id, {"plan_id": self._verification_plan.plan_id, "plan_digest": self._verification_plan.integrity_digest})
         report = self._verifier.verify(self._verification_plan, run_id=run.run_id, step_id=step_id, attempt_id=attempt_id, environment=self._verification_environment)
+        command_failures = [
+            (result.verification_id, result.status.value, tuple(
+                (check.get("command"), check.get("observed_exit_code"), check.get("failure_class"), check.get("output_excerpt"))
+                for check in result.checks
+                if check.get("check") == "command_execution"
+            ))
+            for result in report.verification_results
+            if result.status.value in {"FAILED", "INCONCLUSIVE"}
+            and any(check.get("check") == "command_execution" for check in result.checks)
+        ]
+        signature = _digest(repr(command_failures)) if command_failures else None
+        if signature and signature == self._last_failed_command_signature:
+            self._repeated_failed_command_count += 1
+        else:
+            self._repeated_failed_command_count = 1 if signature else 0
+        self._last_failed_command_signature = signature
         self._last_verification = report.verification_results
         self._last_evidence = report.evidence
         self._recorder.record_verification(run.run_id, report.verification_results, report.evidence)
@@ -280,6 +314,15 @@ class AutonomousEngineeringLoop:
         self._progress.append(measurement)
         self._previous_workspace_digest = after
         self._emit(LoopPhase.MEASURE_PROGRESS, run.run_id, {"changed": measurement.changed, "verification_passed": passed, "verification_failed": failed, "verification_inconclusive": inconclusive})
+        if self._repeated_failed_command_count >= 2:
+            reason = "identical verification command failure repeated without a changed failure signature; human diagnosis required"
+            self._emit(LoopPhase.WAIT_HUMAN, run.run_id, {
+                "reason": reason,
+                "failure_signature": signature,
+                "repeated_failure_count": self._repeated_failed_command_count,
+            })
+            self.run_manager.transition(run.run_id, RunState.WAITING_HUMAN, TransitionActor.CONTROLLER, reason=reason)
+            return False
         observation = ProgressObservation(run_id=run.run_id, step_id=step_id, attempt_id=attempt_id, state_digest=after, git_revision=_git_output("rev", self._workspace.workspace), patch_digest=_git_digest("diff", self._workspace.workspace), test_signature=_digest("|".join(r.status.value for r in report.verification_results)), error_signature=_digest("|".join(str(r.checks) for r in report.verification_results)) if failed else None)
         bounded = self._bounded.assess(run, self._budget, progress=observation, strategy_id=self._plan.strategy_id if self._plan else None)
         if bounded.action is LimitAction.WAIT_HUMAN:
