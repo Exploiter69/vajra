@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import subprocess
 import sys
@@ -71,7 +72,7 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
     store = SQLiteRunStore(state_db)
     state = events = store
     manager = RunManager(state_store=store, event_store=store)
-    objective = "Add multiply(a, b) to calculator.py and add a regression test proving multiply(6, 7) == 42."
+    objective = ("Add multiply(a, b) to calculator.py and add a regression test proving multiply(6, 7) == 42. Preserve the existing add(a, b) API and its test asserting add(2, 3) == 5; do not replace or delete existing behavior.")
     run = EngineeringRun(
         run_id=run_id, objective=objective, repository_id="vajra-run-3-repo",
         base_revision=revision, acceptance_criteria=("multiply exists and its regression test passes",),
@@ -83,6 +84,8 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         predicates=(
             AcceptancePredicate("implementation", "1", "multiply implementation exists"),
             AcceptancePredicate("regression", "1", "multiply regression test exists"),
+            AcceptancePredicate("preserve-add", "1", "existing add API remains"),
+            AcceptancePredicate("preserve-add-test", "1", "existing addition regression test remains"),
             AcceptancePredicate("tests", "1", "project tests pass"),
         ),
         required_evidence=("verification_result",), verification_plan_ref="vajra-run-3-criteria",
@@ -91,6 +94,8 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         objective, criteria,
         ({"predicate_id": "implementation", "kind": "FILE_CONTAINS", "path": "calculator.py", "needle": "def multiply"},
          {"predicate_id": "regression", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "multiply(6, 7) == 42"},
+         {"predicate_id": "preserve-add", "kind": "FILE_CONTAINS", "path": "calculator.py", "needle": "def add"},
+         {"predicate_id": "preserve-add-test", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "add(2, 3) == 5"},
          {"predicate_id": "tests", "kind": "COMMAND_EXIT", "command": (sys.executable, "-m", "pytest", "-q"), "expected_exit_code": 0}))
 
     policy = PolicyEvaluator("vajra-run-3-policy", "1", (
@@ -121,6 +126,12 @@ def main() -> int:
     parser.add_argument("--kernel-template", type=Path, default=Path(os.environ.get("VAJRA_KAGGLE_KERNEL_TEMPLATE", "infra/kaggle/burst_worker")))
     parser.add_argument("--kernel-ref", default=os.environ.get("VAJRA_KAGGLE_KERNEL_REF", ""))
     args = parser.parse_args()
+
+    if importlib.util.find_spec("pytest") is None:
+        print("verification_environment_not_ready: pytest is not installed in the active Python interpreter.")
+        print("Install VAJRA development dependencies with: python -m pip install -e '.[dev]'")
+        print("No worker call or project workspace mutation was attempted.")
+        return 2
 
     identity = ModelIdentity("kaggle", os.environ.get("VAJRA_WORKER_MODEL", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M"), "llama.cpp", "http-worker")
     endpoint = None
@@ -185,8 +196,12 @@ def main() -> int:
         if not result.completed:
             print(f"reason: {result.reason}")
             return 1
-        assert "def multiply" in (workspace / "calculator.py").read_text(encoding="utf-8")
-        assert "multiply(6, 7) == 42" in (workspace / "test_calculator.py").read_text(encoding="utf-8")
+        calculator_source = (workspace / "calculator.py").read_text(encoding="utf-8")
+        test_source = (workspace / "test_calculator.py").read_text(encoding="utf-8")
+        assert "def multiply" in calculator_source
+        assert "multiply(6, 7) == 42" in test_source
+        assert "def add" in calculator_source
+        assert "add(2, 3) == 5" in test_source
         return 0
 
     finally:
