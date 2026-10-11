@@ -43,7 +43,7 @@ class HTTPWorkerProvider(WorkerProvider):
 
     infer_url: str
     health_url: str | None = None
-    timeout_seconds: int = 5
+    timeout_seconds: int = 30
     expected_model: str | None = None
     expected_protocol: str = "vajra-worker-v1"
 
