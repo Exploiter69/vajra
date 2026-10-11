@@ -8,6 +8,7 @@ from vajra.domain import AttemptState, EngineeringRun
 from vajra.runtime.event_store import EventStore, InMemoryEventStore
 from vajra.runtime.lease import LeaseManager
 from vajra.runtime.state_store import InMemoryStateStore, StateStore
+from vajra.runtime.storage_transaction import storage_transaction
 from vajra.runtime.worker_protocol import WorkerResult
 
 
@@ -60,6 +61,16 @@ class WorkerResultAcceptor:
             now=now,
         )
 
+        with storage_transaction(self._state_store, self._event_store):
+            return self._accept_validated(identity, result, now=now)
+
+    def _accept_validated(
+        self,
+        identity: WorkerExecutionIdentity,
+        result: WorkerResult,
+        *,
+        now: datetime | None = None,
+    ) -> EngineeringRun:
         run = self._state_store.get_run(identity.run_id)
         previous = deepcopy(run)
 
