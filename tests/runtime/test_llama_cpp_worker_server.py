@@ -73,3 +73,14 @@ def test_infer_rejects_missing_prompt():
     assert result.status == "failed"
     assert result.correlation_id == "corr-llama-1"
     assert result.errors
+
+
+def test_worker_authentication_fails_closed():
+    from vajra.runtime.llama_cpp_worker_server import is_authorized
+
+    token = "x" * 40
+    assert is_authorized(f"Bearer {token}", token)
+    assert not is_authorized("Bearer wrong", token)
+    assert not is_authorized("", token)
+    assert not is_authorized(f"Bearer {token}", "")
+    assert not is_authorized(f"Bearer {token}", "short")
