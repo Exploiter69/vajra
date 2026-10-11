@@ -61,16 +61,6 @@ class WorkerResultAcceptor:
             now=now,
         )
 
-        with storage_transaction(self._state_store, self._event_store):
-            return self._accept_validated(identity, result, now=now)
-
-    def _accept_validated(
-        self,
-        identity: WorkerExecutionIdentity,
-        result: WorkerResult,
-        *,
-        now: datetime | None = None,
-    ) -> EngineeringRun:
         run = self._state_store.get_run(identity.run_id)
         previous = deepcopy(run)
 
@@ -111,16 +101,16 @@ class WorkerResultAcceptor:
         run.artifacts.extend(result.artifacts)
 
         try:
-            self._state_store.save_run(run)
-
-            self._event_store.append(
-                self._make_event(
-                    run=run,
-                    event_type=event_type,
-                    identity=identity,
-                    result=result,
+            with storage_transaction(self._state_store, self._event_store):
+                self._state_store.save_run(run)
+                self._event_store.append(
+                    self._make_event(
+                        run=run,
+                        event_type=event_type,
+                        identity=identity,
+                        result=result,
+                    )
                 )
-            )
         except Exception:
             self._state_store.save_run(previous)
             raise
