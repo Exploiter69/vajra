@@ -6,6 +6,7 @@ from vajra.domain import (
     AttemptState,
     EngineeringRun,
     RunState,
+    StepState,
 )
 from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.lease import LeaseManager
@@ -93,6 +94,7 @@ def test_accept_successful_worker_result():
     attempt = result.steps[0].attempts[0]
 
     assert attempt.state is AttemptState.SUCCEEDED
+    assert result.steps[0].state is StepState.COMPLETE
     assert attempt.lease_id is None
     assert lease_manager.get("attempt-1") is None
     assert event_store.list_for_run("run-1")[-1].event_type == (
@@ -113,6 +115,7 @@ def test_accept_failed_worker_result():
     attempt = result.steps[0].attempts[0]
 
     assert attempt.state is AttemptState.FAILED
+    assert result.steps[0].state is StepState.RECOVERING
     assert attempt.error == "compiler failed"
     assert attempt.lease_id is None
     assert event_store.list_for_run("run-1")[-1].event_type == (
