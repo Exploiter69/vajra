@@ -179,3 +179,41 @@ def test_anti_gaming_guard_blocks_missing_evidence_and_wrong_verifier() -> None:
     )
     assert report.status is AntiGamingStatus.BLOCK
     assert {finding.rule for finding in report.findings} == {"missing_evidence", "verifier_identity", "artifact_binding"}
+
+
+
+def test_missing_pytest_is_inconclusive_and_captures_diagnostics() -> None:
+    objective = "run project tests"
+    plan = AcceptanceCriteriaCompiler().compile(
+        objective,
+        frozen_criteria(objective),
+        [{
+            "predicate_id": "predicate-1",
+            "kind": "COMMAND_EXIT",
+            "command": ["python", "-m", "pytest", "-q"],
+            "expected_exit_code": 0,
+        }],
+    )
+
+    class MissingPytestExecutor:
+        def execute(self, command, environment):
+            return 1, "/python: No module named pytest\\n"
+
+    report = IndependentVerifier(MissingPytestExecutor()).verify(
+        plan,
+        run_id="run-missing-pytest",
+        step_id="step-tests",
+        attempt_id="attempt-tests",
+        environment=VerificationEnvironment(
+            workspace=Path("/tmp/workspace"),
+            network_enabled=True,
+        ),
+    )
+
+    result = report.verification_results[0]
+    execution = next(check for check in result.checks if check.get("check") == "command_execution")
+    assert result.status is VerificationStatus.INCONCLUSIVE
+    assert execution["failure_class"] == "missing_test_runner"
+    assert "No module named pytest" in execution["output_excerpt"]
+    assert report.evidence[0].output_excerpt == "/python: No module named pytest\\n"
+    assert report.evidence[0].output_digest
