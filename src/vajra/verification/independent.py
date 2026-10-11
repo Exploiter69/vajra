@@ -62,10 +62,15 @@ class IndependentVerifier:
                         failure_class = "missing_command"
                     else:
                         failure_class = "command_failed"
+                classified_status = (
+                    VerificationStatus.INCONCLUSIVE
+                    if failure_class in {"missing_test_runner", "missing_command"}
+                    else result.status
+                )
                 result = VerificationResult(
                     verification_id=result.verification_id,
                     run_id=result.run_id,
-                    status=result.status,
+                    status=classified_status,
                     checks=tuple(result.checks) + ({
                         "check": "command_execution",
                         "command": list(command),
