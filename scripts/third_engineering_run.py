@@ -21,9 +21,8 @@ from vajra.routing.contracts import ModelIdentity
 from vajra.runtime.remote_model import build_remote_gateway, build_kaggle_batch_gateway
 from vajra.runtime.worker_provider import HTTPWorkerProvider, WorkerProviderError
 from vajra.runtime.remote_reasoner import GatewayReasoner
-from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
-from vajra.runtime.state_store import InMemoryStateStore
+from vajra.runtime.sqlite_run_store import SQLiteRunStore
 from vajra.verification.environment import VerificationEnvironment
 from vajra.verification.independent import IndependentVerifier, SubprocessVerificationExecutor
 from vajra.verification.plan import AcceptanceCriteriaCompiler
@@ -68,9 +67,10 @@ def prepare_workspace(workspace: Path) -> str:
     return git("rev-parse", "HEAD", cwd=workspace)
 
 
-def build_loop(workspace: Path, revision: str, gateway: object, model_identity: ModelIdentity, run_id: str):
-    state, events = InMemoryStateStore(), InMemoryEventStore()
-    manager = RunManager(state_store=state, event_store=events)
+def build_loop(workspace: Path, revision: str, gateway: object, model_identity: ModelIdentity, run_id: str, state_db: Path):
+    store = SQLiteRunStore(state_db)
+    state = events = store
+    manager = RunManager(state_store=store, event_store=store)
     objective = "Add multiply(a, b) to calculator.py and add a regression test proving multiply(6, 7) == 42."
     run = EngineeringRun(
         run_id=run_id, objective=objective, repository_id="vajra-run-3-repo",
@@ -108,13 +108,14 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         workspace=WorkspaceRuntime(workspace.resolve(), "vajra-run-3-workspace", "vajra-run-3-repo", revision),
         budget=Budget("vajra-run-3-budget", 2400, 20, 20, 20, 40, 4_000_000, 2400),
         bounded_autonomy=BoundedAutonomy(), max_cycles=32)
-    return loop, manager
+    return loop, manager, store
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="VAJRA Run #3: real Qwen proposal through ModelGateway.")
     parser.add_argument("--workspace", type=Path, default=Path.home() / "vajra-run-3-project")
-    parser.add_argument("--run-id", default="third-engineering-run")
+    parser.add_argument("--run-id", default=None, help="Unique run ID; defaults to a UTC timestamped ID.")
+    parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("VAJRA_STATE_DB", "~/.local/state/vajra/run3.sqlite3")), help="SQLite database for canonical run state and lifecycle events.")
     parser.add_argument("--endpoint", default=os.environ.get("VAJRA_KAGGLE_WORKER_URL", "http://127.0.0.1:8787/infer"))
     parser.add_argument("--kaggle-batch", action="store_true", default=os.environ.get("VAJRA_KAGGLE_MODE") == "batch")
     parser.add_argument("--kernel-template", type=Path, default=Path(os.environ.get("VAJRA_KAGGLE_KERNEL_TEMPLATE", "infra/kaggle/burst_worker")))
@@ -149,12 +150,15 @@ def main() -> int:
 
     workspace = args.workspace.expanduser().resolve()
     revision = prepare_workspace(workspace)
-    loop, manager = build_loop(workspace, revision, gateway, identity, args.run_id)
+    run_id = args.run_id or f"run3-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
+    state_db = args.state_db.expanduser().resolve()
+    loop, manager, store = build_loop(workspace, revision, gateway, identity, run_id, state_db)
 
     print("=== VAJRA ENGINEERING RUN #3 ===")
     print(f"workspace: {workspace}")
     print(f"base_revision: {revision}")
-    print(f"run_id: {args.run_id}")
+    print(f"run_id: {run_id}")
+    print(f"state_db: {state_db}")
     print(f"model: {identity.canonical}")
     print(f"mode: {mode}")
     if endpoint is not None:
@@ -167,23 +171,26 @@ def main() -> int:
 
     print("authority: model proposes; VAJRA policy/broker/verifier decide")
     print()
-    result = loop.run(args.run_id)
-    run = manager.get_run(args.run_id)
-    print(f"result: {'COMPLETE' if result.completed else run.state.value}")
-    print(f"cycles: {result.cycles}")
-    print(f"steps: {len(run.steps)}")
-    print(f"attempts: {sum(len(s.attempts) for s in run.steps)}")
-    print(f"verification_results: {len(run.verification_results)}")
-    print(f"artifacts: {len(run.artifacts)}")
-    print(f"events: {len(manager.events(args.run_id))}")
-    print(f"git_status: {git('status', '--porcelain', cwd=workspace) or 'clean'}")
-    if not result.completed:
-        print(f"reason: {result.reason}")
-        return 1
-    assert "def multiply" in (workspace / "calculator.py").read_text(encoding="utf-8")
-    assert "multiply(6, 7) == 42" in (workspace / "test_calculator.py").read_text(encoding="utf-8")
-    return 0
+    try:
+        result = loop.run(run_id)
+            run = manager.get_run(run_id)
+        print(f"result: {'COMPLETE' if result.completed else run.state.value}")
+        print(f"cycles: {result.cycles}")
+        print(f"steps: {len(run.steps)}")
+        print(f"attempts: {sum(len(s.attempts) for s in run.steps)}")
+        print(f"verification_results: {len(run.verification_results)}")
+        print(f"artifacts: {len(run.artifacts)}")
+        print(f"events: {len(manager.events(run_id))}")
+        print(f"git_status: {git('status', '--porcelain', cwd=workspace) or 'clean'}")
+        if not result.completed:
+            print(f"reason: {result.reason}")
+            return 1
+        assert "def multiply" in (workspace / "calculator.py").read_text(encoding="utf-8")
+        assert "multiply(6, 7) == 42" in (workspace / "test_calculator.py").read_text(encoding="utf-8")
+        return 0
 
+    finally:
+        store.close()
 
 if __name__ == "__main__":
     raise SystemExit(main())
