@@ -21,13 +21,19 @@ def make_run(run_id: str = "run-1") -> EngineeringRun:
     )
 
 
-def test_create_and_get_run() -> None:
+def test_create_and_get_run_returns_isolated_copy() -> None:
     store = InMemoryStateStore()
     run = make_run()
 
     store.create_run(run)
+    fetched = store.get_run("run-1")
 
-    assert store.get_run("run-1") is run
+    assert fetched == run
+    assert fetched is not run
+
+    run.objective = "mutated caller-owned object"
+    fetched.objective = "mutated fetched object"
+    assert store.get_run("run-1").objective == "test objective"
 
 
 def test_duplicate_run_rejected() -> None:
@@ -47,6 +53,18 @@ def test_save_existing_run() -> None:
     store.create_run(run)
     run.objective = "updated objective"
     store.save_run(run)
+
+    assert store.get_run("run-1").objective == "updated objective"
+
+
+def test_save_does_not_retain_mutable_caller_reference() -> None:
+    store = InMemoryStateStore()
+    run = make_run()
+    store.create_run(run)
+
+    run.objective = "updated objective"
+    saved = store.save_run(run)
+    saved.objective = "mutated returned object"
 
     assert store.get_run("run-1").objective == "updated objective"
 
