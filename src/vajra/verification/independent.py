@@ -52,6 +52,31 @@ class IndependentVerifier:
                 exit_code, output = self._executor.execute(command, environment)
                 expected = parameters["expected_exit_code"]
                 result = self._command_result(check.check_id, run_id, step_id, attempt_id, expected, exit_code, plan)
+                output_excerpt = output[:4096]
+                failure_class = None
+                if exit_code != expected:
+                    lowered = output.lower()
+                    if "no module named pytest" in lowered or "no module named 'pytest'" in lowered:
+                        failure_class = "missing_test_runner"
+                    elif "command not found" in lowered or ("not found" in lowered and command[0] in lowered):
+                        failure_class = "missing_command"
+                    else:
+                        failure_class = "command_failed"
+                result = VerificationResult(
+                    verification_id=result.verification_id,
+                    run_id=result.run_id,
+                    status=result.status,
+                    checks=tuple(result.checks) + ({
+                        "check": "command_execution",
+                        "command": list(command),
+                        "expected_exit_code": expected,
+                        "observed_exit_code": exit_code,
+                        "failure_class": failure_class,
+                        "output_excerpt": output_excerpt,
+                    },),
+                    evidence_refs=result.evidence_refs,
+                    verifier_version=result.verifier_version,
+                )
             elif check.kind is CriterionKind.FILE_EXISTS:
                 relative = str(parameters["path"])
                 path = self._safe_path(environment.workspace, relative)
@@ -92,7 +117,12 @@ class IndependentVerifier:
                 exit_code=exit_code,
                 output_reference=f"memory://verification/{check.check_id}",
                 output=output,
-                environment=environment.env_dict(),
+                environment={
+                    "workspace": str(environment.workspace),
+                    "environment_keys": ",".join(sorted(key for key, _ in environment.environment)),
+                    "timeout_seconds": str(environment.timeout_seconds),
+                    "network_enabled": str(environment.network_enabled).lower(),
+                },
             )
             evidence.append(sealed)
             results.append(
