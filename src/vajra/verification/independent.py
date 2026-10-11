@@ -52,7 +52,7 @@ class IndependentVerifier:
                 exit_code, output = self._executor.execute(command, environment)
                 expected = parameters["expected_exit_code"]
                 result = self._command_result(check.check_id, run_id, step_id, attempt_id, expected, exit_code, plan)
-                output_excerpt = output[:4096]
+                output_excerpt = self._redact_output(output, environment)[:4096]
                 failure_class = None
                 if exit_code != expected:
                     lowered = output.lower()
@@ -121,7 +121,7 @@ class IndependentVerifier:
                 command=command,
                 exit_code=exit_code,
                 output_reference=f"memory://verification/{check.check_id}",
-                output=output,
+                output=self._redact_output(output, environment),
                 environment={
                     "workspace": str(environment.workspace),
                     "environment_keys": ",".join(sorted(key for key, _ in environment.environment)),
@@ -179,6 +179,16 @@ class IndependentVerifier:
             checks=({"check": "supported_verifier", "passed": False, "reason": reason},),
             verifier_version=IndependentVerifier.VERSION,
         )
+
+    @staticmethod
+    def _redact_output(output: str, environment: VerificationEnvironment) -> str:
+        """Remove long configured secret-like values before persisting diagnostics."""
+        redacted = output
+        for key, value in environment.env_dict().items():
+            lowered = key.lower()
+            if value and (any(marker in lowered for marker in ("token", "secret", "password", "api_key", "apikey")) or len(value) >= 32):
+                redacted = redacted.replace(value, "[REDACTED]")
+        return redacted
 
     @staticmethod
     def _safe_path(root: Path, relative: str) -> Path:
