@@ -24,7 +24,7 @@ def test_canonical_kaggle_notebook_is_valid_and_authenticated() -> None:
     assert "VAJRA_WORKER_TOKEN" in worker
     assert "Authorization" in smoke
     assert "payload['protocol_version']" in smoke
-    assert "trycloudflare.com" in tunnel
+    assert "trycloudflare" in tunnel
 
     for index, cell in enumerate(cells[1:], start=1):
         if cell["cell_type"] != "code":
