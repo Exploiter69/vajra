@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -61,7 +62,7 @@ class RunManager:
         self._completion_gate = CompletionGate()
 
     def create_run(self, run: EngineeringRun) -> EngineeringRun:
-        with self._lock:
+        with self._lock, self._storage_transaction():
             result = self._state_store.create_run(run)
             try:
                 self._record_event(run_id=run.run_id, event_type="RUN_CREATED")
@@ -82,7 +83,7 @@ class RunManager:
         *,
         reason: str = "",
     ) -> EngineeringRun:
-        with self._lock:
+        with self._lock, self._storage_transaction():
             run = self.get_run(run_id)
             previous = deepcopy(run)
             self._transition_authority.assert_authorized(run, target, actor, reason=reason)
@@ -112,7 +113,7 @@ class RunManager:
         reason: str = "",
     ) -> EngineeringRun:
         """Complete a Run only after the evidence-bound completion gate passes."""
-        with self._lock:
+        with self._lock, self._storage_transaction():
             self._completion_gate.authorize(
                 acceptance,
                 artifact_refs=artifact_refs,
@@ -147,7 +148,7 @@ class RunManager:
                 raise
 
     def abort_run(self, run_id: str, reason: str, actor: TransitionActor) -> EngineeringRun:
-        with self._lock:
+        with self._lock, self._storage_transaction():
             run = self.get_run(run_id)
             previous = deepcopy(run)
             if run.state not in {RunState.QUEUED, RunState.PAUSED, RunState.RECOVERING, RunState.WAITING_HUMAN}:
@@ -164,7 +165,7 @@ class RunManager:
                 raise
 
     def add_step(self, run_id: str, step_id: str, name: str) -> Step:
-        with self._lock:
+        with self._lock, self._storage_transaction():
             run = self.get_run(run_id)
             previous = deepcopy(run)
             if any(step.step_id == step_id for step in run.steps):
@@ -196,7 +197,7 @@ class RunManager:
         lease_ttl_seconds: int = 60,
         now: datetime | None = None,
     ) -> Attempt:
-        with self._lock:
+        with self._lock, self._storage_transaction():
             run = self.get_run(run_id)
             previous = deepcopy(run)
             step = self._get_step(run, step_id)
@@ -243,7 +244,7 @@ class RunManager:
             return self._lease_manager.get(attempt_id)
 
     def fail_attempt(self, run_id: str, step_id: str, attempt_id: str, error: str) -> Attempt:
-        with self._lock:
+        with self._lock, self._storage_transaction():
             run = self.get_run(run_id)
             previous = deepcopy(run)
             step = self._get_step(run, step_id)
@@ -271,7 +272,7 @@ class RunManager:
                 raise
 
     def recover_run(self, run_id: str) -> EngineeringRun:
-        with self._lock:
+        with self._lock, self._storage_transaction():
             run = self.get_run(run_id)
             if run.state is not RunState.RECOVERING:
                 previous = deepcopy(run)
@@ -329,6 +330,14 @@ class RunManager:
             payload=payload or {},
         )
         return self._event_store.append(event)
+
+    def _storage_transaction(self):
+        """Use one shared store transaction when state and events share a backend."""
+        if self._state_store is self._event_store:
+            transaction = getattr(self._state_store, "transaction", None)
+            if callable(transaction):
+                return transaction()
+        return nullcontext()
 
     def _remove_created_run(self, run_id: str) -> None:
         if isinstance(self._state_store, InMemoryStateStore):
