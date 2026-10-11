@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from urllib.request import Request, urlopen
 
@@ -27,10 +28,14 @@ class HTTPWorkerTransport:
 
         payload = self._adapter.encode_job(job).encode("utf-8")
 
+        headers = {"Content-Type": "application/json"}
+        token = os.environ.get("VAJRA_WORKER_TOKEN", "")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         request = Request(
             self.endpoint,
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
 
@@ -52,10 +57,14 @@ class HTTPWorkerTransport:
 
         payload = self._adapter.encode_job(job).encode("utf-8")
 
+        headers = {"Content-Type": "application/json"}
+        token = os.environ.get("VAJRA_WORKER_TOKEN", "")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         request = Request(
             self.endpoint,
             data=payload,
-            headers={"Content-Type": "application/json"},
+            headers=headers,
             method="POST",
         )
 
