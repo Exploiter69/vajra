@@ -7,7 +7,7 @@ from vajra.control.contracts import AcceptanceCriteria, AcceptancePredicate, sta
 from vajra.domain.models import VerificationStatus
 from vajra.verification.anti_gaming import AntiGamingGuard, AntiGamingStatus
 from vajra.verification.environment import VerificationEnvironment, VerificationEnvironmentError
-from vajra.verification.independent import IndependentVerifier
+from vajra.verification.independent import IndependentVerifier, SubprocessVerificationExecutor
 from vajra.verification.integrity import TestIntegrityAuditor
 from vajra.verification.plan import AcceptanceCriteriaCompiler, CriterionKind
 
@@ -179,3 +179,68 @@ def test_anti_gaming_guard_blocks_missing_evidence_and_wrong_verifier() -> None:
     )
     assert report.status is AntiGamingStatus.BLOCK
     assert {finding.rule for finding in report.findings} == {"missing_evidence", "verifier_identity", "artifact_binding"}
+
+
+
+def test_missing_pytest_is_inconclusive_and_captures_diagnostics() -> None:
+    objective = "run project tests"
+    plan = AcceptanceCriteriaCompiler().compile(
+        objective,
+        frozen_criteria(objective),
+        [{
+            "predicate_id": "predicate-1",
+            "kind": "COMMAND_EXIT",
+            "command": ["python", "-m", "pytest", "-q"],
+            "expected_exit_code": 0,
+        }],
+    )
+
+    class MissingPytestExecutor:
+        def execute(self, command, environment):
+            return 1, "/python: No module named pytest\\n"
+
+    report = IndependentVerifier(MissingPytestExecutor()).verify(
+        plan,
+        run_id="run-missing-pytest",
+        step_id="step-tests",
+        attempt_id="attempt-tests",
+        environment=VerificationEnvironment(
+            workspace=Path("/tmp/workspace"),
+            network_enabled=True,
+        ),
+    )
+
+    result = report.verification_results[0]
+    execution = next(check for check in result.checks if check.get("check") == "command_execution")
+    assert result.status is VerificationStatus.INCONCLUSIVE
+    assert execution["failure_class"] == "missing_test_runner"
+    assert "No module named pytest" in execution["output_excerpt"]
+    assert report.evidence[0].output_excerpt == "/python: No module named pytest\\n"
+    assert report.evidence[0].output_digest
+
+
+
+def test_missing_verification_command_is_inconclusive(tmp_path: Path) -> None:
+    objective = "run a missing verification command"
+    plan = AcceptanceCriteriaCompiler().compile(
+        objective,
+        frozen_criteria(objective),
+        [{
+            "predicate_id": "predicate-1",
+            "kind": "COMMAND_EXIT",
+            "command": ["vajra-command-that-does-not-exist"],
+            "expected_exit_code": 0,
+        }],
+    )
+    report = IndependentVerifier(SubprocessVerificationExecutor()).verify(
+        plan,
+        run_id="run-missing-command",
+        step_id="step-tests",
+        attempt_id="attempt-tests",
+        environment=VerificationEnvironment(workspace=tmp_path, network_enabled=True),
+    )
+    result = report.verification_results[0]
+    execution = next(check for check in result.checks if check.get("check") == "command_execution")
+    assert result.status is VerificationStatus.INCONCLUSIVE
+    assert execution["failure_class"] == "missing_command"
+    assert "verification command not found" in execution["output_excerpt"]

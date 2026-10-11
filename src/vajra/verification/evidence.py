@@ -20,6 +20,7 @@ class VerificationEvidence:
     exit_code: int | None
     output_reference: str
     output_digest: str | None
+    output_excerpt: str
     environment: dict[str, str]
     timestamp: str
     evidence_digest: str
@@ -40,6 +41,7 @@ class VerificationEvidenceBuilder:
         output_reference: str,
         output: str | bytes | None = None,
         environment: dict[str, str] | None = None,
+        max_excerpt_chars: int = 4096,
         timestamp: str | None = None,
     ) -> VerificationEvidence:
         if not check_id:
@@ -48,13 +50,17 @@ class VerificationEvidenceBuilder:
             raise ValueError("command must contain non-empty strings")
         if not output_reference:
             raise ValueError("output_reference must not be empty")
+        if max_excerpt_chars < 0:
+            raise ValueError("max_excerpt_chars must be non-negative")
 
         effective_environment = dict(environment or {})
         effective_timestamp = timestamp or datetime.now(timezone.utc).isoformat()
         output_digest = None
+        output_excerpt = ""
         if output is not None:
-            output_bytes = output if isinstance(output, bytes) else output.encode("utf-8")
+            output_bytes = output if isinstance(output, bytes) else output.encode("utf-8", errors="replace")
             output_digest = hashlib.sha256(output_bytes).hexdigest()
+            output_excerpt = output_bytes[:max_excerpt_chars].decode("utf-8", errors="replace")
 
         payload: dict[str, Any] = {
             "check_id": check_id,
@@ -63,6 +69,7 @@ class VerificationEvidenceBuilder:
             "exit_code": exit_code,
             "output_reference": output_reference,
             "output_digest": output_digest,
+            "output_excerpt": output_excerpt,
             "environment": effective_environment,
             "timestamp": effective_timestamp,
             "verification_id": result.verification_id,
@@ -86,6 +93,7 @@ class VerificationEvidenceBuilder:
             exit_code=exit_code,
             output_reference=output_reference,
             output_digest=output_digest,
+            output_excerpt=output_excerpt,
             environment=effective_environment,
             timestamp=effective_timestamp,
             evidence_digest=digest,

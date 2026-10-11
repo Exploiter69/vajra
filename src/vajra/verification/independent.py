@@ -52,6 +52,38 @@ class IndependentVerifier:
                 exit_code, output = self._executor.execute(command, environment)
                 expected = parameters["expected_exit_code"]
                 result = self._command_result(check.check_id, run_id, step_id, attempt_id, expected, exit_code, plan)
+                output_excerpt = self._redact_output(output, environment)[:4096]
+                failure_class = None
+                if exit_code != expected:
+                    lowered = output.lower()
+                    if "no module named pytest" in lowered or "no module named 'pytest'" in lowered:
+                        failure_class = "missing_test_runner"
+                    elif "command not found" in lowered or ("not found" in lowered and command[0] in lowered):
+                        failure_class = "missing_command"
+                    elif "timed out" in lowered or "timeout" in lowered:
+                        failure_class = "command_timeout"
+                    else:
+                        failure_class = "command_failed"
+                classified_status = (
+                    VerificationStatus.INCONCLUSIVE
+                    if failure_class in {"missing_test_runner", "missing_command"}
+                    else result.status
+                )
+                result = VerificationResult(
+                    verification_id=result.verification_id,
+                    run_id=result.run_id,
+                    status=classified_status,
+                    checks=tuple(result.checks) + ({
+                        "check": "command_execution",
+                        "command": list(command),
+                        "expected_exit_code": expected,
+                        "observed_exit_code": exit_code,
+                        "failure_class": failure_class,
+                        "output_excerpt": output_excerpt,
+                    },),
+                    evidence_refs=result.evidence_refs,
+                    verifier_version=result.verifier_version,
+                )
             elif check.kind is CriterionKind.FILE_EXISTS:
                 relative = str(parameters["path"])
                 path = self._safe_path(environment.workspace, relative)
@@ -91,8 +123,13 @@ class IndependentVerifier:
                 command=command,
                 exit_code=exit_code,
                 output_reference=f"memory://verification/{check.check_id}",
-                output=output,
-                environment=environment.env_dict(),
+                output=self._redact_output(output, environment),
+                environment={
+                    "workspace": str(environment.workspace),
+                    "environment_keys": ",".join(sorted(key for key, _ in environment.environment)),
+                    "timeout_seconds": str(environment.timeout_seconds),
+                    "network_enabled": str(environment.network_enabled).lower(),
+                },
             )
             evidence.append(sealed)
             results.append(
@@ -146,6 +183,16 @@ class IndependentVerifier:
         )
 
     @staticmethod
+    def _redact_output(output: str, environment: VerificationEnvironment) -> str:
+        """Remove long configured secret-like values before persisting diagnostics."""
+        redacted = output
+        for key, value in environment.env_dict().items():
+            lowered = key.lower()
+            if value and (any(marker in lowered for marker in ("token", "secret", "password", "api_key", "apikey")) or len(value) >= 32):
+                redacted = redacted.replace(value, "[REDACTED]")
+        return redacted
+
+    @staticmethod
     def _safe_path(root: Path, relative: str) -> Path:
         path = (root / relative).resolve()
         root = root.resolve()
@@ -167,14 +214,22 @@ class SubprocessVerificationExecutor:
             raise ValueError("verification command must contain non-empty strings")
         if not environment.network_enabled:
             raise RuntimeError("network-disabled verification must use an isolated sandbox executor")
-        completed = subprocess.run(
-            tuple(command),
-            cwd=environment.workspace,
-            env=environment.env_dict(),
-            capture_output=True,
-            text=True,
-            timeout=environment.timeout_seconds,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                tuple(command),
+                cwd=environment.workspace,
+                env=environment.env_dict(),
+                capture_output=True,
+                text=True,
+                timeout=environment.timeout_seconds,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            return 127, f"verification command not found: {command[0]}: {exc}"
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            output = f"verification command timed out after {environment.timeout_seconds}s\n{stdout}{stderr}"
+            return 124, output.encode("utf-8", errors="replace")[: self.max_output_bytes].decode("utf-8", errors="replace")
         output = (completed.stdout + completed.stderr).encode("utf-8", errors="replace")[: self.max_output_bytes].decode("utf-8", errors="replace")
         return completed.returncode, output

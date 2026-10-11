@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from vajra.domain import AttemptState, EngineeringRun
+from vajra.domain import AttemptState, EngineeringRun, StepState
 from vajra.runtime.event_store import EventStore, InMemoryEventStore
 from vajra.runtime.lease import LeaseManager
 from vajra.runtime.state_store import InMemoryStateStore, StateStore
@@ -86,10 +86,12 @@ class WorkerResultAcceptor:
 
         if result.status.upper() in {"SUCCEEDED", "SUCCESS", "COMPLETED"}:
             attempt.state = AttemptState.SUCCEEDED
+            step.state = StepState.COMPLETE
             event_type = "WORKER_RESULT_ACCEPTED"
         elif result.status.upper() in {"FAILED", "FAILURE"}:
             attempt.state = AttemptState.FAILED
             attempt.error = "; ".join(result.errors) or "Worker reported failure"
+            step.state = StepState.RECOVERING
             event_type = "WORKER_RESULT_FAILED"
         else:
             raise ValueError(f"Unsupported worker result status: {result.status}")

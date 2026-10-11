@@ -18,14 +18,14 @@ class FakeKaggleResultTransport:
                     "intent_id": "a",
                     "operation": "WRITE_FILE",
                     "path": "calculator.py",
-                    "content": "def multiply(a,b):\n    return a*b\n",
+                    "content": "def add(a: int, b: int) -> int:\n    return a + b\n\ndef multiply(a: int, b: int) -> int:\n    return a * b\n",
                     "reason": "implement multiply",
                 },
                 {
                     "intent_id": "b",
                     "operation": "WRITE_FILE",
                     "path": "test_calculator.py",
-                    "content": "from calculator import multiply\n\n\ndef test_multiply():\n    assert multiply(6, 7) == 42\n",
+                    "content": "from calculator import add, multiply\n\n\ndef test_add_existing_behavior():\n    assert add(2, 3) == 5\n\ndef test_multiply():\n    assert multiply(6, 7) == 42\n",
                     "reason": "regression test",
                 },
             ],
@@ -104,10 +104,12 @@ def test_run3_local_replay_completes_real_control_plane(tmp_path):
 
     assert result.completed is True
     assert run.state.value == "COMPLETE"
+    assert "def add" in (workspace / "calculator.py").read_text()
     assert "def multiply" in (workspace / "calculator.py").read_text()
+    assert "add(2, 3) == 5" in (workspace / "test_calculator.py").read_text()
     assert "multiply(6, 7) == 42" in (workspace / "test_calculator.py").read_text()
     assert len(run.steps) == 2
-    assert len(run.verification_results) == 3
+    assert len(run.verification_results) == 5
     assert run.artifacts
     expected_events = manager.events("run3-local-replay")
     store.close()
@@ -119,6 +121,6 @@ def test_run3_local_replay_completes_real_control_plane(tmp_path):
         recovered_manager = RunManager(state_store=reopened, event_store=reopened)
         recovered = recovered_manager.get_run("run3-local-replay")
         assert recovered.state.value == "COMPLETE"
-        assert len(recovered.verification_results) == 3
+        assert len(recovered.verification_results) == 5
         assert recovered.artifacts == run.artifacts
         assert recovered_manager.events("run3-local-replay") == expected_events
