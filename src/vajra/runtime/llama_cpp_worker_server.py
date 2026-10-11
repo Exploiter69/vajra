@@ -17,6 +17,12 @@ MODEL = os.environ.get("VAJRA_WORKER_MODEL", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_
 WORKER_ID = os.environ.get("VAJRA_WORKER_ID", "kaggle-t4-llama-cpp-01")
 adapter = KaggleWorkerAdapter()
 
+
+def is_authorized(supplied: str, expected_token: str) -> bool:
+    return len(expected_token) >= 32 and hmac.compare_digest(
+        supplied, f"Bearer {expected_token}"
+    )
+
 def llama_ready() -> bool:
     try:
         req = Request(f"{LLAMA_API}/health", method="GET")
@@ -108,9 +114,7 @@ class Handler(BaseHTTPRequestHandler):
         if len(expected_token) < 32:
             self._send(503, {"error": "worker_auth_not_configured"})
             return
-        supplied = self.headers.get("Authorization", "")
-        expected = f"Bearer {expected_token}"
-        if not hmac.compare_digest(supplied, expected):
+        if not is_authorized(self.headers.get("Authorization", ""), expected_token):
             self._send(401, {"error": "unauthorized"})
             return
         try:
