@@ -110,3 +110,28 @@ def test_http_transport_execute_decodes_worker_result(monkeypatch):
     assert result.status == "completed"
     assert result.correlation_id == "corr-001"
     assert result.structured_result == {"response": "hello"}
+
+
+def test_http_transport_attaches_worker_bearer_token(monkeypatch):
+    from vajra.runtime import http_worker_transport
+
+    captured = {}
+
+    class FakeResponse:
+        status = 200
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b"{}"
+
+    def fake_urlopen(request, timeout):
+        captured["request"] = request
+        return FakeResponse()
+
+    monkeypatch.setenv("VAJRA_WORKER_TOKEN", "t" * 40)
+    monkeypatch.setattr(http_worker_transport, "urlopen", fake_urlopen)
+    HTTPWorkerTransport("https://worker.example/infer").dispatch(make_job())
+
+    assert captured["request"].get_header("Authorization") == f"Bearer {'t' * 40}"

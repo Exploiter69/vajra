@@ -94,8 +94,9 @@ def test_run3_local_replay_completes_real_control_plane(tmp_path):
     identity = ModelIdentity(
         "kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch"
     )
-    loop, manager = build_loop(
-        workspace, revision, Gateway(), identity, "run3-local-replay"
+    database = tmp_path / "run3.sqlite3"
+    loop, manager, store = build_loop(
+        workspace, revision, Gateway(), identity, "run3-local-replay", database
     )
 
     result = loop.run("run3-local-replay")
@@ -108,3 +109,16 @@ def test_run3_local_replay_completes_real_control_plane(tmp_path):
     assert len(run.steps) == 2
     assert len(run.verification_results) == 3
     assert run.artifacts
+    expected_events = manager.events("run3-local-replay")
+    store.close()
+
+    from vajra.runtime.run_manager import RunManager
+    from vajra.runtime.sqlite_run_store import SQLiteRunStore
+
+    with SQLiteRunStore(database) as reopened:
+        recovered_manager = RunManager(state_store=reopened, event_store=reopened)
+        recovered = recovered_manager.get_run("run3-local-replay")
+        assert recovered.state.value == "COMPLETE"
+        assert len(recovered.verification_results) == 3
+        assert recovered.artifacts == run.artifacts
+        assert recovered_manager.events("run3-local-replay") == expected_events

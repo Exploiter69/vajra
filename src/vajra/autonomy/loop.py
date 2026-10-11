@@ -22,6 +22,7 @@ from vajra.policy import PolicyEvaluator
 from vajra.policy.contracts import Intent
 from vajra.recovery.progress import ProgressObservation
 from vajra.runtime.event_store import EventStore
+from vajra.runtime.storage_transaction import storage_transaction
 from vajra.runtime.state_store import StateStore
 from vajra.runtime.worker_acceptance import WorkerExecutionIdentity, WorkerResultAcceptor
 from vajra.runtime.worker_protocol import WorkerResult
@@ -50,7 +51,7 @@ class _RunStateRecorder:
         self._lock = RLock()
 
     def record_verification(self, run_id: str, results: tuple, evidence: tuple) -> None:
-        with self._lock:
+        with self._lock, storage_transaction(self._state, self._events):
             run = self._state.get_run(run_id)
             previous = deepcopy(run)
             run.verification_results.extend(results)

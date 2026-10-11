@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import time
@@ -15,6 +16,12 @@ LLAMA_API = os.environ.get("VAJRA_LLAMA_URL", "http://127.0.0.1:8000").rstrip("/
 MODEL = os.environ.get("VAJRA_WORKER_MODEL", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M")
 WORKER_ID = os.environ.get("VAJRA_WORKER_ID", "kaggle-t4-llama-cpp-01")
 adapter = KaggleWorkerAdapter()
+
+
+def is_authorized(supplied: str, expected_token: str) -> bool:
+    return len(expected_token) >= 32 and hmac.compare_digest(
+        supplied, f"Bearer {expected_token}"
+    )
 
 def llama_ready() -> bool:
     try:
@@ -103,6 +110,13 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/infer":
             self._send(404, {"error": "not_found"})
             return
+        expected_token = os.environ.get("VAJRA_WORKER_TOKEN", "")
+        if len(expected_token) < 32:
+            self._send(503, {"error": "worker_auth_not_configured"})
+            return
+        if not is_authorized(self.headers.get("Authorization", ""), expected_token):
+            self._send(401, {"error": "unauthorized"})
+            return
         try:
             result = infer(self._read_job())
             self._send(200 if result.status == "completed" else 502,
@@ -114,6 +128,8 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 def serve() -> None:
+    if len(os.environ.get("VAJRA_WORKER_TOKEN", "")) < 32:
+        raise RuntimeError("VAJRA_WORKER_TOKEN must be configured with at least 32 characters")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     server.daemon_threads = True
     print(f"VAJRA llama.cpp worker listening on http://{HOST}:{PORT}", flush=True)

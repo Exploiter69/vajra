@@ -8,6 +8,7 @@ from vajra.domain import AttemptState, EngineeringRun
 from vajra.runtime.event_store import EventStore, InMemoryEventStore
 from vajra.runtime.lease import LeaseManager
 from vajra.runtime.state_store import InMemoryStateStore, StateStore
+from vajra.runtime.storage_transaction import storage_transaction
 from vajra.runtime.worker_protocol import WorkerResult
 
 
@@ -100,16 +101,16 @@ class WorkerResultAcceptor:
         run.artifacts.extend(result.artifacts)
 
         try:
-            self._state_store.save_run(run)
-
-            self._event_store.append(
-                self._make_event(
-                    run=run,
-                    event_type=event_type,
-                    identity=identity,
-                    result=result,
+            with storage_transaction(self._state_store, self._event_store):
+                self._state_store.save_run(run)
+                self._event_store.append(
+                    self._make_event(
+                        run=run,
+                        event_type=event_type,
+                        identity=identity,
+                        result=result,
+                    )
                 )
-            )
         except Exception:
             self._state_store.save_run(previous)
             raise

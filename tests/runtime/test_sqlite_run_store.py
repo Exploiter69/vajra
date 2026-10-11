@@ -83,3 +83,49 @@ def test_duplicate_run_is_rejected_after_reopen(tmp_path):
     with pytest.raises(ValueError, match="Run already exists"):
         second.create_run(make_run())
     second.close()
+
+
+def test_worker_result_state_and_event_roll_back_in_one_sqlite_transaction(tmp_path):
+    from vajra.runtime.worker_acceptance import (
+        WorkerExecutionIdentity,
+        WorkerResultAcceptor,
+    )
+    from vajra.runtime.worker_protocol import WorkerResult
+
+    class FailingStore(SQLiteRunStore):
+        def append(self, event):
+            if event.event_type == "WORKER_RESULT_ACCEPTED":
+                raise RuntimeError("event persistence failed")
+            return super().append(event)
+
+    store = FailingStore(tmp_path / "worker-atomic.sqlite3")
+    manager = RunManager(state_store=store, event_store=store)
+    manager.create_run(make_run())
+    manager.add_step("sqlite-run", "step-1", "worker result")
+    manager.start_attempt(
+        "sqlite-run", "step-1", "attempt-1", "worker-1", "lease-1"
+    )
+    lease = manager.get_lease("attempt-1")
+    assert lease is not None
+    identity = WorkerExecutionIdentity(
+        run_id="sqlite-run",
+        step_id="step-1",
+        attempt_id="attempt-1",
+        worker_id="worker-1",
+        lease_id=lease.lease_id,
+        fencing_token=lease.fencing_token,
+    )
+    acceptor = WorkerResultAcceptor(manager.lease_manager, store, store)
+    before = manager.get_run("sqlite-run")
+    before_events = manager.events("sqlite-run")
+
+    with pytest.raises(RuntimeError, match="event persistence failed"):
+        acceptor.accept(identity, WorkerResult(status="SUCCEEDED"))
+
+    after = manager.get_run("sqlite-run")
+    assert after.steps[0].attempts[0].state.value == "RUNNING"
+    assert after.steps[0].attempts[0].lease_id == lease.lease_id
+    assert after.artifacts == before.artifacts
+    assert manager.events("sqlite-run") == before_events
+    assert manager.get_lease("attempt-1") == lease
+    store.close()

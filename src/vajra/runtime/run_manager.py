@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -27,6 +26,7 @@ from vajra.control.transition_authority import (
 from vajra.runtime.event_store import EventStore, InMemoryEventStore
 from vajra.runtime.lease import LeaseManager, WorkerLease
 from vajra.runtime.state_store import InMemoryStateStore, StateStore
+from vajra.runtime.storage_transaction import storage_transaction
 
 
 @dataclass(frozen=True)
@@ -333,11 +333,7 @@ class RunManager:
 
     def _storage_transaction(self):
         """Use one shared store transaction when state and events share a backend."""
-        if self._state_store is self._event_store:
-            transaction = getattr(self._state_store, "transaction", None)
-            if callable(transaction):
-                return transaction()
-        return nullcontext()
+        return storage_transaction(self._state_store, self._event_store)
 
     def _remove_created_run(self, run_id: str) -> None:
         if isinstance(self._state_store, InMemoryStateStore):
