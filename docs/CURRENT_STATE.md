@@ -336,7 +336,10 @@ The Phase 16 layer does not authorize execution, mutate canonical Run state dire
 1. Oracle-hosted infrastructure remains unproven because the project is constrained to ₹0.00/no paid infrastructure.
 2. Physical gVisor proof is environment-specific and is not reproduced by hosted CI.
 3. Real multi-day soak campaigns require an operator to leave the runner executing for the selected elapsed duration. Accelerated CI cannot prove elapsed-time behavior.
-4. The local durable runtime remains a development/reference implementation, not the final distributed production durability backend.
+4. Run #3 now uses the standard-library SQLite store for canonical Run snapshots and lifecycle events. Its shared-store transaction boundary covers RunManager transitions, loop evidence recording, and worker-result acceptance.
+5. The authenticated Kaggle Qwen worker, native llama.cpp build, and temporary tunnel are prepared in `infra/kaggle/vajra_qwen3_coder_t4x2.ipynb`; the physical GPU/model/tunnel retest is still pending operator execution.
+6. SQLite persistence does not yet restore the in-process reasoning plan and intent cursor after arbitrary process loss. Automatic continuation of an interrupted Run #3 is not claimed.
+7. The separate local durable runtime remains a development/reference implementation, not a distributed production durability backend.
 
 These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requirements.
 
