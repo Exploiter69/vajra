@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import json
 import os
 import time
@@ -103,6 +104,15 @@ class Handler(BaseHTTPRequestHandler):
         if self.path != "/infer":
             self._send(404, {"error": "not_found"})
             return
+        expected_token = os.environ.get("VAJRA_WORKER_TOKEN", "")
+        if len(expected_token) < 32:
+            self._send(503, {"error": "worker_auth_not_configured"})
+            return
+        supplied = self.headers.get("Authorization", "")
+        expected = f"Bearer {expected_token}"
+        if not hmac.compare_digest(supplied, expected):
+            self._send(401, {"error": "unauthorized"})
+            return
         try:
             result = infer(self._read_job())
             self._send(200 if result.status == "completed" else 502,
@@ -114,6 +124,8 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 def serve() -> None:
+    if len(os.environ.get("VAJRA_WORKER_TOKEN", "")) < 32:
+        raise RuntimeError("VAJRA_WORKER_TOKEN must be configured with at least 32 characters")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     server.daemon_threads = True
     print(f"VAJRA llama.cpp worker listening on http://{HOST}:{PORT}", flush=True)
