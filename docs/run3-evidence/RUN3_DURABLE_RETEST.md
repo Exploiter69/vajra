@@ -5,6 +5,11 @@ This retest changes the controller's canonical run/event backend to SQLite. Kagg
 ## What this proves
 
 - The Run #3 harness writes canonical run snapshots and lifecycle events to one SQLite database.
+- Run #3 preflights pytest before contacting the worker or mutating the workspace; missing pytest is reported as an environment prerequisite, not a code-test failure.
+- Frozen acceptance checks require preserving the original `add()` API and its test while adding multiplication.
+- Command verification evidence stores the bounded output excerpt, output digest, command, exit code, and sanitized environment metadata in the durable run/event record.
+- Missing test runners/commands are classified as inconclusive, and repeated identical command failures stop for human diagnosis instead of cycling indefinitely.
+- Accepted worker results transition their step state to `COMPLETE`; failed results transition the step to `RECOVERING`.
 - State and event writes made through RunManager, the loop evidence recorder, and worker-result acceptance share a transaction when they use the same SQLiteRunStore.
 - SQLite can be closed and reopened without losing the persisted run snapshot or event sequence.
 - Remote inference requires a bearer token of at least 32 characters. Health/capability discovery is public metadata; `POST /infer` is authenticated.
@@ -26,7 +31,7 @@ After this PR is merged, on the Omarchy laptop:
 cd ~/vajra
 git pull --ff-only origin main
 source .venv/bin/activate
-python -m pip install -e .
+python -m pip install -e '.[dev]'
 export VAJRA_WORKER_TOKEN='<the same private token configured in Kaggle>'
 export VAJRA_KAGGLE_WORKER_URL='https://<the-printed-host>.trycloudflare.com/infer'
 python scripts/third_engineering_run.py
