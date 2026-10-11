@@ -7,7 +7,7 @@ from vajra.control.contracts import AcceptanceCriteria, AcceptancePredicate, sta
 from vajra.domain.models import VerificationStatus
 from vajra.verification.anti_gaming import AntiGamingGuard, AntiGamingStatus
 from vajra.verification.environment import VerificationEnvironment, VerificationEnvironmentError
-from vajra.verification.independent import IndependentVerifier
+from vajra.verification.independent import IndependentVerifier, SubprocessVerificationExecutor
 from vajra.verification.integrity import TestIntegrityAuditor
 from vajra.verification.plan import AcceptanceCriteriaCompiler, CriterionKind
 
