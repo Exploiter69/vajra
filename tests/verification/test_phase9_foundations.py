@@ -217,3 +217,30 @@ def test_missing_pytest_is_inconclusive_and_captures_diagnostics() -> None:
     assert "No module named pytest" in execution["output_excerpt"]
     assert report.evidence[0].output_excerpt == "/python: No module named pytest\\n"
     assert report.evidence[0].output_digest
+
+
+
+def test_missing_verification_command_is_inconclusive(tmp_path: Path) -> None:
+    objective = "run a missing verification command"
+    plan = AcceptanceCriteriaCompiler().compile(
+        objective,
+        frozen_criteria(objective),
+        [{
+            "predicate_id": "predicate-1",
+            "kind": "COMMAND_EXIT",
+            "command": ["vajra-command-that-does-not-exist"],
+            "expected_exit_code": 0,
+        }],
+    )
+    report = IndependentVerifier(SubprocessVerificationExecutor()).verify(
+        plan,
+        run_id="run-missing-command",
+        step_id="step-tests",
+        attempt_id="attempt-tests",
+        environment=VerificationEnvironment(workspace=tmp_path, network_enabled=True),
+    )
+    result = report.verification_results[0]
+    execution = next(check for check in result.checks if check.get("check") == "command_execution")
+    assert result.status is VerificationStatus.INCONCLUSIVE
+    assert execution["failure_class"] == "missing_command"
+    assert "verification command not found" in execution["output_excerpt"]
