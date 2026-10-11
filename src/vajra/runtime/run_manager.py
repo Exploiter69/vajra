@@ -44,9 +44,9 @@ class RunManager:
     This layer deliberately does not execute commands, call models, or
     communicate with workers.
 
-    Lifecycle mutations are rollback-safe against persistence failures in
-    the current application/in-memory boundary. Durable atomicity belongs
-    to the future DurableRuntime implementation.
+    Lifecycle mutations use a shared backend transaction when the state and
+    event stores are the same transactional store. Separate/non-transactional
+    stores retain best-effort rollback semantics only.
     """
 
     def __init__(
