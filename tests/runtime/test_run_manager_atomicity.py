@@ -40,19 +40,22 @@ def make_run() -> EngineeringRun:
 
 def test_transition_does_not_hide_event_persistence_failure():
     state_store = InMemoryStateStore()
+    event_store = FailingEventStore()
     manager = RunManager(
         state_store=state_store,
-        event_store=FailingEventStore(),
+        event_store=event_store,
     )
 
-    run = make_run()
-    manager.create_run(run)
+    manager.create_run(make_run())
 
     with pytest.raises(RuntimeError, match="event persistence failed"):
         manager.transition("atomicity-run", RunState.QUEUED, TransitionActor.SYSTEM)
 
     # State must roll back when the lifecycle event cannot be persisted.
     assert manager.get_run("atomicity-run").state is RunState.CREATED
+    events = event_store.list_for_run("atomicity-run")
+    assert len(events) == 1
+    assert events[0].event_type == "RUN_CREATED"
 
 
 def test_state_persistence_failure_prevents_event_creation():
@@ -63,15 +66,16 @@ def test_state_persistence_failure_prevents_event_creation():
         event_store=event_store,
     )
 
-    run = make_run()
-    manager.create_run(run)
+    manager.create_run(make_run())
+    initial_events = event_store.list_for_run("atomicity-run")
+    assert len(initial_events) == 1
+    assert initial_events[0].event_type == "RUN_CREATED"
 
     state_store.fail_save = True
 
     with pytest.raises(RuntimeError, match="state persistence failed"):
         manager.transition("atomicity-run", RunState.QUEUED, TransitionActor.SYSTEM)
 
-    assert event_store.list_for_run("atomicity-run") == (
-        event_store.list_for_run("atomicity-run")[0],
-    )
-    assert manager.get_run("atomicity-run").state is RunState.QUEUED
+    # A failed write must leave the last committed state and event history intact.
+    assert manager.get_run("atomicity-run").state is RunState.CREATED
+    assert event_store.list_for_run("atomicity-run") == initial_events

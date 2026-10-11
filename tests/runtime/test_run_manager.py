@@ -30,7 +30,10 @@ def test_create_and_retrieve_run():
 
     manager.create_run(run)
 
-    assert manager.get_run("run-001") is run
+    retrieved = manager.get_run("run-001")
+
+    assert retrieved == run
+    assert retrieved is not run
 
 
 def test_duplicate_run_is_rejected():
