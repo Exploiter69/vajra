@@ -60,6 +60,8 @@ class IndependentVerifier:
                         failure_class = "missing_test_runner"
                     elif "command not found" in lowered or ("not found" in lowered and command[0] in lowered):
                         failure_class = "missing_command"
+                    elif "timed out" in lowered or "timeout" in lowered:
+                        failure_class = "command_timeout"
                     else:
                         failure_class = "command_failed"
                 classified_status = (
@@ -212,14 +214,22 @@ class SubprocessVerificationExecutor:
             raise ValueError("verification command must contain non-empty strings")
         if not environment.network_enabled:
             raise RuntimeError("network-disabled verification must use an isolated sandbox executor")
-        completed = subprocess.run(
-            tuple(command),
-            cwd=environment.workspace,
-            env=environment.env_dict(),
-            capture_output=True,
-            text=True,
-            timeout=environment.timeout_seconds,
-            check=False,
-        )
+        try:
+            completed = subprocess.run(
+                tuple(command),
+                cwd=environment.workspace,
+                env=environment.env_dict(),
+                capture_output=True,
+                text=True,
+                timeout=environment.timeout_seconds,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            return 127, f"verification command not found: {command[0]}: {exc}"
+        except subprocess.TimeoutExpired as exc:
+            stdout = exc.stdout.decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
+            stderr = exc.stderr.decode("utf-8", errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
+            output = f"verification command timed out after {environment.timeout_seconds}s\n{stdout}{stderr}"
+            return 124, output.encode("utf-8", errors="replace")[: self.max_output_bytes].decode("utf-8", errors="replace")
         output = (completed.stdout + completed.stderr).encode("utf-8", errors="replace")[: self.max_output_bytes].decode("utf-8", errors="replace")
         return completed.returncode, output
