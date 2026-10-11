@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from threading import RLock
 
 from vajra.domain import EngineeringRun
@@ -31,6 +32,7 @@ class InMemoryStateStore(StateStore):
     """
     Test/development StateStore.
 
+    Stored state is isolated from caller-owned objects by deep copies.
     This implementation is intentionally non-durable and must never be
     treated as VAJRA's production canonical persistence mechanism.
     """
@@ -44,13 +46,14 @@ class InMemoryStateStore(StateStore):
             if run.run_id in self._runs:
                 raise ValueError(f"Run already exists: {run.run_id}")
 
-            self._runs[run.run_id] = run
-            return run
+            stored = deepcopy(run)
+            self._runs[run.run_id] = stored
+            return deepcopy(stored)
 
     def get_run(self, run_id: str) -> EngineeringRun:
         with self._lock:
             try:
-                return self._runs[run_id]
+                return deepcopy(self._runs[run_id])
             except KeyError:
                 raise KeyError(f"Run not found: {run_id}") from None
 
@@ -59,5 +62,6 @@ class InMemoryStateStore(StateStore):
             if run.run_id not in self._runs:
                 raise KeyError(f"Run not found: {run.run_id}")
 
-            self._runs[run.run_id] = run
-            return run
+            stored = deepcopy(run)
+            self._runs[run.run_id] = stored
+            return deepcopy(stored)
