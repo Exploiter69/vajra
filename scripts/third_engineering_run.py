@@ -173,7 +173,7 @@ def main() -> int:
     print()
     try:
         result = loop.run(run_id)
-            run = manager.get_run(run_id)
+        run = manager.get_run(run_id)
         print(f"result: {'COMPLETE' if result.completed else run.state.value}")
         print(f"cycles: {result.cycles}")
         print(f"steps: {len(run.steps)}")
