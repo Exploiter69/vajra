@@ -20,6 +20,7 @@ def test_canonical_kaggle_notebook_is_valid_and_authenticated() -> None:
 
     assert "f2cc7282ce0042641df55e0e563b75e824e2b647" in markdown
     assert "cmake --build" in boot
+    assert "checkout --detach FETCH_HEAD" in boot
     assert "CMAKE_CUDA_ARCHITECTURES=75" in boot
     assert "VAJRA_WORKER_TOKEN" in worker
     assert "Authorization" in smoke
