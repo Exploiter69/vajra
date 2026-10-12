@@ -259,7 +259,7 @@ class AutonomousEngineeringLoop:
                     if value not in (None, "", [], ()):
                         parts.append(f"{key}={value}")
                 details.append(f"{result.verification_id}: " + ", ".join(parts))
-        return "independent verification rejected the candidate; correct these specific failures without removing or weakening existing behavior: " + "; ".join(details)
+        return "Independent checks rejected the candidate. Fix each listed check, preserve existing behavior, and use a different strategy_id for the retry: " + "; ".join(details)
 
     def _replan_after_recovery(self, run: EngineeringRun, failure_reason: str) -> None:
         context = self._build_context(run)
