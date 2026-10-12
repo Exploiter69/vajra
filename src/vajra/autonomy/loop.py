@@ -285,7 +285,7 @@ class AutonomousEngineeringLoop:
         self, run: EngineeringRun, cycle: int, phase: str, exc: Exception
     ) -> LoopResult:
         """Persist an unavailable reasoning boundary as a human-resumable Run state."""
-        detail = f"{type(exc).__name__}: {exc}".replace("\\n", " ")[:400]
+        detail = f"{type(exc).__name__}: {exc}".replace("\n", " ")[:400]
         reason = (
             f"Reasoning failed during {phase}: {detail}. "
             "Run is waiting for human intervention; restore worker availability before resuming."
@@ -293,6 +293,7 @@ class AutonomousEngineeringLoop:
         self.run_manager.transition(
             run.run_id, RunState.WAITING_HUMAN, TransitionActor.CONTROLLER, reason=reason
         )
+        self._emit(LoopPhase.WAIT_HUMAN, run.run_id, {"failed_phase": phase, "reason": reason})
         return LoopResult(
             run.run_id, LoopPhase.WAIT_HUMAN, cycle, False, True, False,
             reason, tuple(self._progress)
