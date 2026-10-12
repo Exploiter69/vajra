@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from third_engineering_run import prepare_workspace  # noqa: E402
+from third_engineering_run import git, prepare_workspace  # noqa: E402
 
 
 def test_prepare_workspace_refuses_nonempty_directory_without_mutating_it(tmp_path):
@@ -33,3 +33,22 @@ def test_prepare_workspace_seeds_an_empty_directory(tmp_path):
     assert (workspace / "test_calculator.py").is_file()
     assert "def add" in (workspace / "calculator.py").read_text(encoding="utf-8")
     assert "add(2, 3) == 5" in (workspace / "test_calculator.py").read_text(encoding="utf-8")
+
+
+
+def test_git_helper_preserves_leading_porcelain_status_column(tmp_path):
+    workspace = tmp_path / "porcelain-workspace"
+    workspace.mkdir()
+    prepare_workspace(workspace)
+    (workspace / "calculator.py").write_text(
+        (workspace / "calculator.py").read_text(encoding="utf-8")
+        + "\n# changed\n",
+        encoding="utf-8",
+    )
+
+    status = git("status", "--porcelain", cwd=workspace)
+
+    assert status.startswith(" M calculator.py")
+    status_lines = status.splitlines()
+    changed_paths = {line[3:] for line in status_lines if len(line) >= 4}
+    assert changed_paths == {"calculator.py"}

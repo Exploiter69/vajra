@@ -47,7 +47,7 @@ class ProjectFileBackend:
 
 
 def git(*args: str, cwd: Path) -> str:
-    return subprocess.check_output(("git", "-C", str(cwd), *args), text=True).strip()
+    return subprocess.check_output(("git", "-C", str(cwd), *args), text=True).rstrip("\n")
 
 
 def prepare_workspace(workspace: Path) -> str:
