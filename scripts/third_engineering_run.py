@@ -185,12 +185,12 @@ def main() -> int:
             "kaggle",
             endpoint.model,
             "worker-reported",
-            endpoint.worker_id,
+            "http-worker",
         )
         gateway = build_remote_gateway(endpoint.infer_url, identity)
         mode = "http"
 
-    run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
     run_id = args.run_id or f"run3-{run_stamp}"
     workspace = (
         args.workspace.expanduser().resolve()
