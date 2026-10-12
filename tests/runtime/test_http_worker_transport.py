@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from vajra.runtime.http_worker_transport import HTTPWorkerTransport
 from vajra.runtime.worker_protocol import WorkerJob
 
@@ -104,7 +106,7 @@ def test_http_transport_execute_decodes_worker_result(monkeypatch):
     )
 
     result = HTTPWorkerTransport(
-        "http://worker/infer",
+        "http://127.0.0.1:8787/infer",
     ).execute(make_job())
 
     assert result.status == "completed"
@@ -135,3 +137,31 @@ def test_http_transport_attaches_worker_bearer_token(monkeypatch):
     HTTPWorkerTransport("https://worker.example/infer").dispatch(make_job())
 
     assert captured["request"].get_header("Authorization") == f"Bearer {'t' * 40}"
+
+
+
+def test_http_transport_rejects_remote_endpoint_without_token(monkeypatch):
+    from vajra.runtime.http_worker_transport import HTTPWorkerTransport
+
+    monkeypatch.delenv("VAJRA_WORKER_TOKEN", raising=False)
+    transport = HTTPWorkerTransport("https://worker.example/infer")
+
+    with pytest.raises(RuntimeError, match="VAJRA_WORKER_TOKEN is required"):
+        transport.dispatch(make_job())
+
+
+def test_http_transport_rejects_remote_plaintext_even_with_token(monkeypatch):
+    from vajra.runtime.http_worker_transport import HTTPWorkerTransport
+
+    monkeypatch.setenv("VAJRA_WORKER_TOKEN", "t" * 40)
+    transport = HTTPWorkerTransport("http://worker.example/infer")
+
+    with pytest.raises(RuntimeError, match="must use HTTPS"):
+        transport.dispatch(make_job())
+
+
+def test_http_transport_rejects_credentials_embedded_in_url():
+    from vajra.runtime.http_worker_transport import HTTPWorkerTransport
+
+    with pytest.raises(ValueError, match="must not embed credentials"):
+        HTTPWorkerTransport("https://user:secret@worker.example/infer")
