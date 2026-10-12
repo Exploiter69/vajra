@@ -37,6 +37,34 @@ class FakeKaggleResultTransport:
         )
 
 
+class RecoveringFakeKaggleResultTransport(FakeKaggleResultTransport):
+    """First proposal regresses the old API; the replan repairs it."""
+
+    def __init__(self):
+        self.calls = 0
+
+    def execute(self, job: WorkerJob) -> WorkerResult:
+        self.calls += 1
+        result = super().execute(job)
+        if self.calls != 1:
+            return result
+        payload = json.loads(result.structured_result["response"])
+        for intent in payload["intents"]:
+            if intent["path"] == "calculator.py":
+                intent["content"] = intent["content"].replace(
+                    "def add(a: int, b: int) -> int:", "def add(a, b):"
+                )
+            elif intent["path"] == "test_calculator.py":
+                intent["content"] = intent["content"].replace(
+                    "def test_add_existing_behavior() -> None:", "def test_add():"
+                )
+        return WorkerResult(
+            status="completed",
+            correlation_id=job.correlation_id,
+            structured_result={"response": json.dumps(payload)},
+        )
+
+
 def test_run3_local_replay_preserves_kaggle_wire_shape():
     identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
     adapter = TransportWorkerModelAdapter(
@@ -124,3 +152,50 @@ def test_run3_local_replay_completes_real_control_plane(tmp_path):
         assert len(recovered.verification_results) == 6
         assert recovered.artifacts == run.artifacts
         assert recovered_manager.events("run3-local-replay") == expected_events
+
+
+
+def test_run3_recovery_replans_with_specific_verification_failures(tmp_path):
+    from scripts.third_engineering_run import build_loop, prepare_workspace
+
+    transport = RecoveringFakeKaggleResultTransport()
+
+    class Gateway:
+        def __init__(self):
+            identity = ModelIdentity(
+                "kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch"
+            )
+            self.adapter = TransportWorkerModelAdapter(
+                transport, identity, timeout_seconds=1
+            )
+
+        def invoke(self, request, model_identity):
+            return self.adapter.invoke(request)
+
+    workspace = tmp_path / "recovery-project"
+    revision = prepare_workspace(workspace)
+    identity = ModelIdentity(
+        "kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch"
+    )
+    database = tmp_path / "recovery.sqlite3"
+    loop, manager, store = build_loop(
+        workspace, revision, Gateway(), identity, "run3-recovery-replay", database
+    )
+
+    result = loop.run("run3-recovery-replay")
+    run = manager.get_run("run3-recovery-replay")
+
+    assert transport.calls >= 2, "the rejected first proposal must trigger a replan"
+    assert result.completed is True
+    assert run.state.value == "COMPLETE"
+    assert "def add(a: int, b: int) -> int:" in (workspace / "calculator.py").read_text()
+    assert "def test_add_existing_behavior() -> None:" in (workspace / "test_calculator.py").read_text()
+    replan_events = [
+        event for event in manager.events("run3-recovery-replay")
+        if event.event_type == "AUTONOMY_PLAN" and event.payload.get("replan")
+    ]
+    assert replan_events
+    reason = replan_events[0].payload["recovery_reason"]
+    assert "typed add API" in reason
+    assert "existing addition regression test" in reason
+    store.close()
