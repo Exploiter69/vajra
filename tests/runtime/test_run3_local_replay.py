@@ -207,7 +207,13 @@ def test_run3_worker_failure_during_replan_is_durable_and_waits_for_human(tmp_pa
         recovered_manager = RunManager(state_store=reopened, event_store=reopened)
         recovered = recovered_manager.get_run("run3-worker-failure")
         assert recovered.state.value == "WAITING_HUMAN"
-        assert "HTTP Error 502" in recovered.state_reason if hasattr(recovered, "state_reason") else True
+        wait_events = [
+            event for event in recovered_manager.events("run3-worker-failure")
+            if event.event_type == "AUTONOMY_WAIT_HUMAN"
+        ]
+        assert wait_events
+        assert "HTTP Error 502" in wait_events[-1].payload["reason"]
+        assert wait_events[-1].payload["failed_phase"] == "recovery replanning"
 
 
 
