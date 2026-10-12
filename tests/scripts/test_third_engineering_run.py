@@ -57,25 +57,25 @@ def test_git_helper_preserves_leading_porcelain_status_column(tmp_path):
 
 def test_generated_source_validator_accepts_feature_without_regressing_existing_api():
     calculator = (
-        '"""Calculator module."""\\n\\n'
-        "def add(a: int, b: int) -> int:\\n    return a + b\\n\\n"
-        "def multiply(a, b):\\n    return a * b\\n"
+        '"""Calculator module."""\n\n'
+        "def add(a: int, b: int) -> int:\n    return a + b\n\n"
+        "def multiply(a, b):\n    return a * b\n"
     )
     tests = (
-        "from calculator import add, multiply\\n\\n"
-        "def test_add_existing_behavior() -> None:\\n    assert add(2, 3) == 5\\n\\n"
-        "def test_multiply_regression():\\n    assert multiply(6, 7) == 42\\n"
+        "from calculator import add, multiply\n\n"
+        "def test_add_existing_behavior() -> None:\n    assert add(2, 3) == 5\n\n"
+        "def test_multiply_regression():\n    assert multiply(6, 7) == 42\n"
     )
 
     assert validate_generated_sources(calculator, tests) == ()
 
 
 def test_generated_source_validator_rejects_existing_api_and_test_replacement():
-    calculator = "def add(a, b):\\n    return a + b\\n\\ndef multiply(a, b):\\n    return a * b\\n"
+    calculator = "def add(a, b):\n    return a + b\n\ndef multiply(a, b):\n    return a * b\n"
     tests = (
-        "from calculator import add, multiply\\n\\n"
-        "def test_add():\\n    assert add(2, 3) == 5\\n\\n"
-        "def test_multiply():\\n    assert multiply(6, 7) == 42\\n"
+        "from calculator import add, multiply\n\n"
+        "def test_add():\n    assert add(2, 3) == 5\n\n"
+        "def test_multiply():\n    assert multiply(6, 7) == 42\n"
     )
 
     assert validate_generated_sources(calculator, tests) == (
