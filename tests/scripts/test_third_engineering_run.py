@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-from third_engineering_run import prepare_workspace
+from third_engineering_run import prepare_workspace  # noqa: E402
 
 
 def test_prepare_workspace_refuses_nonempty_directory_without_mutating_it(tmp_path):
