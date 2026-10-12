@@ -52,6 +52,13 @@ def git(*args: str, cwd: Path) -> str:
 
 def prepare_workspace(workspace: Path) -> str:
     workspace.mkdir(parents=True, exist_ok=True)
+    if not workspace.is_dir():
+        raise NotADirectoryError(f"workspace is not a directory: {workspace}")
+    if any(workspace.iterdir()):
+        raise FileExistsError(
+            f"refusing to overwrite a non-empty workspace: {workspace}; "
+            "choose a new --workspace path"
+        )
     subprocess.run(("git", "init", "-q", str(workspace)), check=True)
     (workspace / "calculator.py").write_text(
         '"""Tiny calculator module: intentionally missing multiply()."""\n\n'
@@ -118,7 +125,12 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="VAJRA Run #3: real Qwen proposal through ModelGateway.")
-    parser.add_argument("--workspace", type=Path, default=Path.home() / "vajra-run-3-project")
+    parser.add_argument(
+        "--workspace",
+        type=Path,
+        default=None,
+        help="empty workspace path; by default a unique timestamped fixture is created",
+    )
     parser.add_argument("--run-id", default=None, help="Unique run ID; defaults to a UTC timestamped ID.")
     parser.add_argument("--state-db", type=Path, default=Path(os.environ.get("VAJRA_STATE_DB", "~/.local/state/vajra/run3.sqlite3")), help="SQLite database for canonical run state and lifecycle events.")
     parser.add_argument("--endpoint", default=os.environ.get("VAJRA_KAGGLE_WORKER_URL", "http://127.0.0.1:8787/infer"))
@@ -133,9 +145,15 @@ def main() -> int:
         print("No worker call or project workspace mutation was attempted.")
         return 2
 
-    identity = ModelIdentity("kaggle", os.environ.get("VAJRA_WORKER_MODEL", "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M"), "llama.cpp", "http-worker")
+    configured_model = os.environ.get("VAJRA_WORKER_MODEL", "").strip()
     endpoint = None
     if args.kaggle_batch:
+        identity = ModelIdentity(
+            "kaggle",
+            configured_model or "qwen2.5-coder:32b",
+            "ollama",
+            "kaggle-batch",
+        )
         template = args.kernel_template.expanduser().resolve()
         if not template.is_dir():
             print(f"worker_not_ready: Kaggle kernel template not found: {template}")
@@ -148,7 +166,14 @@ def main() -> int:
         gateway = build_kaggle_batch_gateway(template, args.kernel_ref)
         mode = "kaggle-batch"
     else:
-        provider = HTTPWorkerProvider(infer_url=args.endpoint, expected_model=identity.model)
+        if not os.environ.get("VAJRA_WORKER_TOKEN", "").strip():
+            print("worker_not_ready: VAJRA_WORKER_TOKEN is required for remote inference.")
+            print("No model call or project workspace mutation was attempted.")
+            return 2
+        provider = HTTPWorkerProvider(
+            infer_url=args.endpoint,
+            expected_model=configured_model or None,
+        )
         try:
             endpoint = provider.ensure_ready()
         except WorkerProviderError as exc:
@@ -156,12 +181,23 @@ def main() -> int:
             print("No project mutation or model call was attempted.")
             print("Start the configured worker session and expose its /health, /capabilities, and /infer endpoints, then rerun.")
             return 2
+        identity = ModelIdentity(
+            "kaggle",
+            endpoint.model,
+            "worker-reported",
+            endpoint.worker_id,
+        )
         gateway = build_remote_gateway(endpoint.infer_url, identity)
         mode = "http"
 
-    workspace = args.workspace.expanduser().resolve()
+    run_stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    run_id = args.run_id or f"run3-{run_stamp}"
+    workspace = (
+        args.workspace.expanduser().resolve()
+        if args.workspace is not None
+        else (Path.home() / f"vajra-run-3-project-{run_stamp}").resolve()
+    )
     revision = prepare_workspace(workspace)
-    run_id = args.run_id or f"run3-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}"
     state_db = args.state_db.expanduser().resolve()
     loop, manager, store = build_loop(workspace, revision, gateway, identity, run_id, state_db)
 
@@ -192,10 +228,30 @@ def main() -> int:
         print(f"verification_results: {len(run.verification_results)}")
         print(f"artifacts: {len(run.artifacts)}")
         print(f"events: {len(manager.events(run_id))}")
-        print(f"git_status: {git('status', '--porcelain', cwd=workspace) or 'clean'}")
+        status = git("status", "--porcelain", cwd=workspace)
+        print(f"git_status: {status or 'clean'}")
         if not result.completed:
             print(f"reason: {result.reason}")
             return 1
+
+        status_lines = status.splitlines()
+        changed_paths = {line[3:] for line in status_lines if len(line) >= 4}
+        expected_paths = {"calculator.py", "test_calculator.py"}
+        if any(line.startswith("??") for line in status_lines) or changed_paths != expected_paths:
+            print("artifact_boundary: FAIL — unexpected workspace changes")
+            print(f"changed_paths: {sorted(changed_paths)}")
+            return 1
+
+        generated_diff = git(
+            "diff", "--no-ext-diff", "--", "calculator.py", "test_calculator.py",
+            cwd=workspace,
+        )
+        print("=== GENERATED DIFF ===")
+        print(generated_diff or "(empty diff)")
+        if not generated_diff:
+            print("artifact_boundary: FAIL — no generated diff to verify")
+            return 1
+
         calculator_source = (workspace / "calculator.py").read_text(encoding="utf-8")
         test_source = (workspace / "test_calculator.py").read_text(encoding="utf-8")
         assert "def multiply" in calculator_source
