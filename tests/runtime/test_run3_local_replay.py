@@ -198,6 +198,6 @@ def test_run3_recovery_replans_with_specific_verification_failures(tmp_path):
     ]
     assert replan_events
     reason = replan_events[0].payload["recovery_reason"]
-    assert "typed add API" in reason
-    assert "existing addition regression test" in reason
+    assert "needle=def add(a: int, b: int) -> int:" in reason
+    assert "needle=def test_add_existing_behavior() -> None:" in reason
     store.close()
