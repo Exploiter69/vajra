@@ -50,6 +50,18 @@ def git(*args: str, cwd: Path) -> str:
     return subprocess.check_output(("git", "-C", str(cwd), *args), text=True).rstrip("\n")
 
 
+def validate_generated_sources(calculator_source: str, test_source: str) -> tuple[str, ...]:
+    """Check the task's feature and preservation requirements independently of pytest."""
+    required = (
+        ("multiply implementation", "def multiply", calculator_source),
+        ("typed add API", "def add(a: int, b: int) -> int:", calculator_source),
+        ("multiply regression", "multiply(6, 7) == 42", test_source),
+        ("existing add test", "def test_add_existing_behavior() -> None:", test_source),
+        ("existing add assertion", "add(2, 3) == 5", test_source),
+    )
+    return tuple(label for label, needle, source in required if needle not in source)
+
+
 def prepare_workspace(workspace: Path) -> str:
     workspace.mkdir(parents=True, exist_ok=True)
     if not workspace.is_dir():
@@ -91,8 +103,9 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         predicates=(
             AcceptancePredicate("implementation", "1", "multiply implementation exists"),
             AcceptancePredicate("regression", "1", "multiply regression test exists"),
-            AcceptancePredicate("preserve-add", "1", "existing add API remains"),
-            AcceptancePredicate("preserve-add-test", "1", "existing addition regression test remains"),
+            AcceptancePredicate("preserve-add", "1", "existing typed add API remains"),
+            AcceptancePredicate("preserve-add-test", "1", "existing addition assertion remains"),
+            AcceptancePredicate("preserve-add-test-name", "1", "existing addition regression test remains named and present"),
             AcceptancePredicate("tests", "1", "project tests pass"),
         ),
         required_evidence=("verification_result",), verification_plan_ref="vajra-run-3-criteria",
@@ -101,7 +114,8 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         objective, criteria,
         ({"predicate_id": "implementation", "kind": "FILE_CONTAINS", "path": "calculator.py", "needle": "def multiply"},
          {"predicate_id": "regression", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "multiply(6, 7) == 42"},
-         {"predicate_id": "preserve-add", "kind": "FILE_CONTAINS", "path": "calculator.py", "needle": "def add"},
+         {"predicate_id": "preserve-add", "kind": "FILE_CONTAINS", "path": "calculator.py", "needle": "def add(a: int, b: int) -> int:"},
+         {"predicate_id": "preserve-add-test-name", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "def test_add_existing_behavior() -> None:"},
          {"predicate_id": "preserve-add-test", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "add(2, 3) == 5"},
          {"predicate_id": "tests", "kind": "COMMAND_EXIT", "command": (sys.executable, "-m", "pytest", "-q"), "expected_exit_code": 0}))
 
@@ -254,10 +268,13 @@ def main() -> int:
 
         calculator_source = (workspace / "calculator.py").read_text(encoding="utf-8")
         test_source = (workspace / "test_calculator.py").read_text(encoding="utf-8")
-        assert "def multiply" in calculator_source
-        assert "multiply(6, 7) == 42" in test_source
-        assert "def add" in calculator_source
-        assert "add(2, 3) == 5" in test_source
+        artifact_errors = validate_generated_sources(calculator_source, test_source)
+        if artifact_errors:
+            print("artifact_quality: FAIL — required behavior or API preservation missing")
+            for error in artifact_errors:
+                print(f"artifact_quality_error: {error}")
+            return 1
+        print("artifact_quality: PASS — new feature added and existing typed API/test preserved")
         return 0
 
     finally:
