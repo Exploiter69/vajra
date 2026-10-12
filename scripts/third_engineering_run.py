@@ -104,7 +104,8 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
             AcceptancePredicate("implementation", "1", "multiply implementation exists"),
             AcceptancePredicate("regression", "1", "multiply regression test exists"),
             AcceptancePredicate("preserve-add", "1", "existing typed add API remains"),
-            AcceptancePredicate("preserve-add-test", "1", "existing addition regression test remains"),
+            AcceptancePredicate("preserve-add-test", "1", "existing addition assertion remains"),
+            AcceptancePredicate("preserve-add-test-name", "1", "existing addition regression test remains named and present"),
             AcceptancePredicate("tests", "1", "project tests pass"),
         ),
         required_evidence=("verification_result",), verification_plan_ref="vajra-run-3-criteria",
@@ -114,7 +115,7 @@ def build_loop(workspace: Path, revision: str, gateway: object, model_identity: 
         ({"predicate_id": "implementation", "kind": "FILE_CONTAINS", "path": "calculator.py", "needle": "def multiply"},
          {"predicate_id": "regression", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "multiply(6, 7) == 42"},
          {"predicate_id": "preserve-add", "kind": "FILE_CONTAINS", "path": "calculator.py", "needle": "def add(a: int, b: int) -> int:"},
-         {"predicate_id": "preserve-add-test", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "def test_add_existing_behavior() -> None:"},
+         {"predicate_id": "preserve-add-test-name", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "def test_add_existing_behavior() -> None:"},
          {"predicate_id": "preserve-add-test", "kind": "FILE_CONTAINS", "path": "test_calculator.py", "needle": "add(2, 3) == 5"},
          {"predicate_id": "tests", "kind": "COMMAND_EXIT", "command": (sys.executable, "-m", "pytest", "-q"), "expected_exit_code": 0}))
 
