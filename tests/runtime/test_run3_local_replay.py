@@ -46,9 +46,11 @@ class RecoveringFakeKaggleResultTransport(FakeKaggleResultTransport):
     def execute(self, job: WorkerJob) -> WorkerResult:
         self.calls += 1
         result = super().execute(job)
-        if self.calls != 1:
-            return result
         payload = json.loads(result.structured_result["response"])
+        if self.calls != 1:
+            payload["strategy_id"] = "recovery-2"
+            result.structured_result["response"] = json.dumps(payload)
+            return result
         for intent in payload["intents"]:
             if intent["path"] == "calculator.py":
                 intent["content"] = intent["content"].replace(
