@@ -204,7 +204,8 @@ class AutonomousEngineeringLoop:
                     self.run_manager.recover_run(run_id)
                 continue
             if run.state is RunState.RECOVERING:
-                self._replan_after_recovery(run)
+                failure_reason = self._verification_failure_reason()
+                self._replan_after_recovery(run, failure_reason)
                 self.run_manager.transition(run_id, RunState.PLANNING, TransitionActor.CONTROLLER, reason="recovery produced a new bounded plan")
                 continue
             if run.state is RunState.PROMOTION:
@@ -234,16 +235,42 @@ class AutonomousEngineeringLoop:
         self._intent_cursor = 0
         self._emit(LoopPhase.PLAN, run.run_id, {"plan_id": plan.plan_id, "context_digest": plan.context_digest, "intent_count": len(plan.intents)})
 
-    def _replan_after_recovery(self, run: EngineeringRun) -> None:
+    def _verification_failure_reason(self) -> str:
+        """Describe concrete independent-verifier failures to guide a bounded replan."""
+        failures = [
+            result for result in self._last_verification
+            if result.status.value in {"FAILED", "INCONCLUSIVE"}
+        ]
+        if not failures:
+            return "verification or execution did not establish acceptable progress"
+        details: list[str] = []
+        for result in failures:
+            failed_checks = [
+                check for check in result.checks
+                if check.get("passed") is False
+            ]
+            if not failed_checks:
+                details.append(f"{result.verification_id}={result.status.value}")
+                continue
+            for check in failed_checks:
+                parts = [str(check.get("check", "check"))]
+                for key in ("subject", "needle", "command", "output_excerpt", "failure_class"):
+                    value = check.get(key)
+                    if value not in (None, "", [], ()):
+                        parts.append(f"{key}={value}")
+                details.append(f"{result.verification_id}: " + ", ".join(parts))
+        return "Independent checks rejected the candidate. Fix each listed check, preserve existing behavior, and use a different strategy_id for the retry: " + "; ".join(details)
+
+    def _replan_after_recovery(self, run: EngineeringRun, failure_reason: str) -> None:
         context = self._build_context(run)
         if self._plan is None:
             raise AutonomousLoopError("recovery requires a previous plan")
-        self._plan = self._reasoning.replan(context, self._plan, "verification or execution did not establish acceptable progress")
+        self._plan = self._reasoning.replan(context, self._plan, failure_reason)
         if self._plan.context_digest != context.digest:
             raise AutonomousLoopError("replan was generated from stale or different context")
         self._intent_cursor = 0
         self._orientation = "replanned after recovery"
-        self._emit(LoopPhase.PLAN, run.run_id, {"replan": True, "plan_id": self._plan.plan_id, "context_digest": context.digest})
+        self._emit(LoopPhase.PLAN, run.run_id, {"replan": True, "plan_id": self._plan.plan_id, "context_digest": context.digest, "recovery_reason": failure_reason})
 
     def _execute_intent(self, run: EngineeringRun, planned: PlannedIntent) -> bool:
         step_id = f"step-{planned.intent_id}"
