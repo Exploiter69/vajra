@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
-from vajra.domain import ArtifactRef
-from vajra.routing.contracts import ModelIdentity, ModelResult, ModelUsage
+from vajra.routing.contracts import ModelIdentity
 from vajra.runtime.remote_model import TransportWorkerModelAdapter
-from vajra.runtime.worker_protocol import WorkerResult
-from vajra.runtime.remote_reasoner import GatewayReasoner
-from vajra.runtime.worker_protocol import WorkerJob
+from vajra.runtime.worker_protocol import WorkerJob, WorkerResult
 
 from third_engineering_run import build_loop, prepare_workspace
 
@@ -68,37 +66,51 @@ class ReplayGateway:
 
 
 def main() -> int:
-    workspace = Path.home() / "vajra-run-3-replay-project"
-    if workspace.exists():
-        import shutil
-        shutil.rmtree(workspace)
+    # Isolate each replay's workspace and durable state so repeated runs are
+    # deterministic and never delete a user's existing project directory.
+    with tempfile.TemporaryDirectory(prefix="vajra-run-3-replay-") as temporary:
+        root = Path(temporary)
+        workspace = root / "project"
+        state_db = root / "run3.sqlite3"
+        revision = prepare_workspace(workspace)
+        identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
+        gateway = ReplayGateway()
+        loop, manager, store = build_loop(
+            workspace,
+            revision,
+            gateway,
+            identity,
+            "third-engineering-run-replay",
+            state_db,
+        )
 
-    revision = prepare_workspace(workspace)
-    identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
-    gateway = ReplayGateway()
-    loop, manager = build_loop(workspace, revision, gateway, identity, "third-engineering-run-replay")
-
-    print("=== VAJRA ENGINEERING RUN #3 — LOCAL REPLAY ===")
-    print("Kaggle transport: REPLAYED")
-    print("Qwen response: REPLAYED")
-    print("Control plane: REAL")
-    print("Execution broker: REAL")
-    print("Independent verifier: REAL")
-    print()
-    result = loop.run("third-engineering-run-replay")
-    run = manager.get_run("third-engineering-run-replay")
-    print(f"result: {'COMPLETE' if result.completed else run.state.value}")
-    print(f"cycles: {result.cycles}")
-    print(f"steps: {len(run.steps)}")
-    print(f"attempts: {sum(len(s.attempts) for s in run.steps)}")
-    print(f"verification_results: {len(run.verification_results)}")
-    print(f"artifacts: {len(run.artifacts)}")
-    print(f"events: {len(manager.events('third-engineering-run-replay'))}")
-    print(f"git_status: {__import__('subprocess').check_output(('git', '-C', str(workspace), 'status', '--porcelain'), text=True).strip() or 'clean'}")
-    if not result.completed:
-        print(f"reason: {result.reason}")
-        return 1
-    return 0
+        try:
+            print("=== VAJRA ENGINEERING RUN #3 — LOCAL REPLAY ===")
+            print("Kaggle transport: REPLAYED")
+            print("Qwen response: REPLAYED")
+            print("Control plane: REAL")
+            print("Execution broker: REAL")
+            print("Independent verifier: REAL")
+            print()
+            result = loop.run("third-engineering-run-replay")
+            run = manager.get_run("third-engineering-run-replay")
+            print(f"result: {'COMPLETE' if result.completed else run.state.value}")
+            print(f"cycles: {result.cycles}")
+            print(f"steps: {len(run.steps)}")
+            print(f"attempts: {sum(len(s.attempts) for s in run.steps)}")
+            print(f"verification_results: {len(run.verification_results)}")
+            print(f"artifacts: {len(run.artifacts)}")
+            print(f"events: {len(manager.events('third-engineering-run-replay'))}")
+            status = __import__("subprocess").check_output(
+                ("git", "-C", str(workspace), "status", "--porcelain"), text=True
+            ).strip()
+            print(f"git_status: {status or 'clean'}")
+            if not result.completed:
+                print(f"reason: {result.reason}")
+                return 1
+            return 0
+        finally:
+            store.close()
 
 
 if __name__ == "__main__":
