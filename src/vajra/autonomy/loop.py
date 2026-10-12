@@ -28,7 +28,16 @@ from vajra.runtime.worker_acceptance import WorkerExecutionIdentity, WorkerResul
 from vajra.runtime.worker_protocol import WorkerResult
 from vajra.verification import IndependentVerifier, FrozenVerificationPlan, VerificationEnvironment
 
-from .contracts import EngineeringPlan, LoopPhase, LoopResult, NullLoopObserver, PlannedIntent, ProgressMeasurement, ReasoningProvider
+from .contracts import (
+    EngineeringPlan,
+    LoopPhase,
+    LoopResult,
+    NullLoopObserver,
+    PlannedIntent,
+    ProgressMeasurement,
+    ReasoningProvider,
+    ReasoningUnavailableError,
+)
 
 
 class AutonomousLoopError(RuntimeError):
@@ -173,14 +182,14 @@ class AutonomousEngineeringLoop:
             if run.state is RunState.ORIENTING:
                 try:
                     self._orient(run)
-                except Exception as exc:
+                except ReasoningUnavailableError as exc:
                     return self._wait_for_reasoning_failure(run, cycle, "orientation", exc)
                 self.run_manager.transition(run_id, RunState.PLANNING, TransitionActor.CONTROLLER, reason="orientation completed")
                 continue
             if run.state is RunState.PLANNING:
                 try:
                     self._plan_for(run)
-                except Exception as exc:
+                except ReasoningUnavailableError as exc:
                     return self._wait_for_reasoning_failure(run, cycle, "planning", exc)
                 self.run_manager.transition(run_id, RunState.EXECUTING, TransitionActor.CONTROLLER, reason="structured plan ready")
                 continue
@@ -213,7 +222,7 @@ class AutonomousEngineeringLoop:
                 failure_reason = self._verification_failure_reason()
                 try:
                     self._replan_after_recovery(run, failure_reason)
-                except Exception as exc:
+                except ReasoningUnavailableError as exc:
                     return self._wait_for_reasoning_failure(run, cycle, "recovery replanning", exc)
                 self.run_manager.transition(run_id, RunState.PLANNING, TransitionActor.CONTROLLER, reason="recovery produced a new bounded plan")
                 continue
