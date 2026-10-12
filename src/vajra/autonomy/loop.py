@@ -28,7 +28,16 @@ from vajra.runtime.worker_acceptance import WorkerExecutionIdentity, WorkerResul
 from vajra.runtime.worker_protocol import WorkerResult
 from vajra.verification import IndependentVerifier, FrozenVerificationPlan, VerificationEnvironment
 
-from .contracts import EngineeringPlan, LoopPhase, LoopResult, NullLoopObserver, PlannedIntent, ProgressMeasurement, ReasoningProvider
+from .contracts import (
+    EngineeringPlan,
+    LoopPhase,
+    LoopResult,
+    NullLoopObserver,
+    PlannedIntent,
+    ProgressMeasurement,
+    ReasoningProvider,
+    ReasoningUnavailableError,
+)
 
 
 class AutonomousLoopError(RuntimeError):
@@ -171,11 +180,17 @@ class AutonomousEngineeringLoop:
                 self.run_manager.transition(run_id, RunState.ORIENTING, TransitionActor.CONTROLLER, reason="begin orientation")
                 continue
             if run.state is RunState.ORIENTING:
-                self._orient(run)
+                try:
+                    self._orient(run)
+                except ReasoningUnavailableError as exc:
+                    return self._wait_for_reasoning_failure(run, cycle, "orientation", exc)
                 self.run_manager.transition(run_id, RunState.PLANNING, TransitionActor.CONTROLLER, reason="orientation completed")
                 continue
             if run.state is RunState.PLANNING:
-                self._plan_for(run)
+                try:
+                    self._plan_for(run)
+                except ReasoningUnavailableError as exc:
+                    return self._wait_for_reasoning_failure(run, cycle, "planning", exc)
                 self.run_manager.transition(run_id, RunState.EXECUTING, TransitionActor.CONTROLLER, reason="structured plan ready")
                 continue
             if run.state is RunState.EXECUTING:
@@ -205,7 +220,10 @@ class AutonomousEngineeringLoop:
                 continue
             if run.state is RunState.RECOVERING:
                 failure_reason = self._verification_failure_reason()
-                self._replan_after_recovery(run, failure_reason)
+                try:
+                    self._replan_after_recovery(run, failure_reason)
+                except ReasoningUnavailableError as exc:
+                    return self._wait_for_reasoning_failure(run, cycle, "recovery replanning", exc)
                 self.run_manager.transition(run_id, RunState.PLANNING, TransitionActor.CONTROLLER, reason="recovery produced a new bounded plan")
                 continue
             if run.state is RunState.PROMOTION:
@@ -271,6 +289,24 @@ class AutonomousEngineeringLoop:
         self._intent_cursor = 0
         self._orientation = "replanned after recovery"
         self._emit(LoopPhase.PLAN, run.run_id, {"replan": True, "plan_id": self._plan.plan_id, "context_digest": context.digest, "recovery_reason": failure_reason})
+
+    def _wait_for_reasoning_failure(
+        self, run: EngineeringRun, cycle: int, phase: str, exc: Exception
+    ) -> LoopResult:
+        """Persist an unavailable reasoning boundary as a human-resumable Run state."""
+        detail = f"{type(exc).__name__}: {exc}".replace("\n", " ")[:400]
+        reason = (
+            f"Reasoning failed during {phase}: {detail}. "
+            "Run is waiting for human intervention; restore worker availability before resuming."
+        )
+        self.run_manager.transition(
+            run.run_id, RunState.WAITING_HUMAN, TransitionActor.CONTROLLER, reason=reason
+        )
+        self._emit(LoopPhase.WAIT_HUMAN, run.run_id, {"failed_phase": phase, "reason": reason})
+        return LoopResult(
+            run.run_id, LoopPhase.WAIT_HUMAN, cycle, False, True, False,
+            reason, tuple(self._progress)
+        )
 
     def _execute_intent(self, run: EngineeringRun, planned: PlannedIntent) -> bool:
         step_id = f"step-{planned.intent_id}"

@@ -156,6 +156,66 @@ def test_run3_local_replay_completes_real_control_plane(tmp_path):
         assert recovered_manager.events("run3-local-replay") == expected_events
 
 
+def test_run3_worker_failure_during_replan_is_durable_and_waits_for_human(tmp_path):
+    from scripts.third_engineering_run import build_loop, prepare_workspace
+    from vajra.runtime.run_manager import RunManager
+    from vajra.runtime.sqlite_run_store import SQLiteRunStore
+
+    class FailingReplanTransport(RecoveringFakeKaggleResultTransport):
+        def execute(self, job: WorkerJob) -> WorkerResult:
+            if self.calls == 0:
+                return super().execute(job)
+            self.calls += 1
+            return WorkerResult(
+                status="failed",
+                correlation_id=job.correlation_id,
+                errors=("HTTPError: HTTP Error 502: Bad Gateway",),
+            )
+
+    transport = FailingReplanTransport()
+
+    class Gateway:
+        def __init__(self):
+            identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
+            self.adapter = TransportWorkerModelAdapter(
+                transport, identity, timeout_seconds=1
+            )
+
+        def invoke(self, request, model_identity):
+            return self.adapter.invoke(request)
+
+    workspace = tmp_path / "worker-failure-project"
+    revision = prepare_workspace(workspace)
+    identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
+    database = tmp_path / "worker-failure.sqlite3"
+    loop, manager, store = build_loop(
+        workspace, revision, Gateway(), identity, "run3-worker-failure", database
+    )
+
+    result = loop.run("run3-worker-failure")
+    run = manager.get_run("run3-worker-failure")
+
+    assert transport.calls == 2
+    assert result.completed is False
+    assert result.waiting_human is True
+    assert run.state.value == "WAITING_HUMAN"
+    assert "HTTP Error 502" in result.reason
+    assert "no completion" not in result.reason.lower()
+    store.close()
+
+    with SQLiteRunStore(database) as reopened:
+        recovered_manager = RunManager(state_store=reopened, event_store=reopened)
+        recovered = recovered_manager.get_run("run3-worker-failure")
+        assert recovered.state.value == "WAITING_HUMAN"
+        wait_events = [
+            event for event in recovered_manager.events("run3-worker-failure")
+            if event.event_type == "AUTONOMY_WAIT_HUMAN"
+        ]
+        assert wait_events
+        assert "HTTP Error 502" in wait_events[-1].payload["reason"]
+        assert wait_events[-1].payload["failed_phase"] == "recovery replanning"
+
+
 
 def test_run3_recovery_replans_with_specific_verification_failures(tmp_path):
     from scripts.third_engineering_run import build_loop, prepare_workspace

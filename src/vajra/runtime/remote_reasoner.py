@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from vajra.autonomy.contracts import EngineeringPlan, PlannedIntent
+from vajra.autonomy.contracts import (
+    EngineeringPlan,
+    PlannedIntent,
+    ReasoningUnavailableError,
+)
 from vajra.context.contracts import ContextBundle
 from vajra.routing.contracts import BudgetEnvelope, ModelRequest, ModelResult
 
@@ -103,7 +107,9 @@ class GatewayReasoner:
         )
         result = self.gateway.invoke(request, self.model_identity)
         if result.status != "SUCCEEDED":
-            raise ModelProposalError("; ".join(result.errors) or "remote model failed")
+            raise ReasoningUnavailableError(
+                "; ".join(result.errors) or "remote reasoning service failed"
+            )
         return result
 
     @staticmethod

@@ -103,6 +103,10 @@ class LoopResult:
     progress: tuple[ProgressMeasurement, ...] = ()
 
 
+class ReasoningUnavailableError(RuntimeError):
+    """The reasoning service could not return a usable response."""
+
+
 class ReasoningProvider(Protocol):
     """Model boundary: reasoning proposes; it never executes or verifies."""
 
