@@ -15,6 +15,7 @@ from vajra.autonomy import (
     RepositoryAuthority,
     SpecializedWorker,
     SpecializedWorkerRegistry,
+    StageCheckpoint,
     StageState,
     WorkerSpecialization,
 )
@@ -140,3 +141,33 @@ def test_execution_uses_dependency_order_even_when_declared_out_of_order(tmp_pat
         verify_stage=lambda stage, result: (True, (f"e-{stage.stage_id}",)),
     )
     assert seen == ["a", "b"]
+
+@pytest.mark.parametrize("ambiguous_state", (StageState.RUNNING, StageState.VERIFYING))
+def test_restart_refuses_to_replay_ambiguous_stage(tmp_path: Path, ambiguous_state: StageState):
+    journal = tmp_path / "ambiguous-stage.jsonl"
+    store = AdvancedRunStore(journal)
+    objective = MultiStepObjective(
+        "ambiguous", "recover safely",
+        (AdvancedStage("stage-a", "Stage A", "perform an operation"),),
+        (repo("r"),),
+    )
+    store.record(StageCheckpoint(
+        objective_id="ambiguous",
+        stage_id="stage-a",
+        state=ambiguous_state,
+        sequence=1,
+        recorded_at="2026-10-18T00:00:00+00:00",
+    ))
+
+    # Reopen the journal to exercise the actual restart path.
+    restarted = AdvancedAutonomyEngine(store=AdvancedRunStore(journal))
+    calls = []
+    with pytest.raises(AdvancedAutonomyError, match="human reconciliation required"):
+        restarted.execute(
+            objective,
+            execute_stage=lambda stage, worker: calls.append(("execute", stage.stage_id),
+            verify_stage=lambda stage, result: calls.append(("verify", stage.stage_id)) or (True, ("evidence",)),
+        )
+
+    assert calls == [], "ambiguous in-flight stages must not be replayed automatically"
+
