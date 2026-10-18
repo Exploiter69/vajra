@@ -247,7 +247,7 @@ class AutonomousEngineeringLoop:
                     self._replan_after_recovery(run, failure_reason)
                 except ReasoningUnavailableError as exc:
                     return self._wait_for_reasoning_failure(run, cycle, "recovery replanning", exc)
-                self.run_manager.transition(run_id, RunState.PLANNING, TransitionActor.CONTROLLER, reason="recovery produced a new bounded plan")
+                self.run_manager.transition(run_id, RunState.EXECUTING, TransitionActor.CONTROLLER, reason="recovery produced a new bounded plan")
                 continue
             if run.state is RunState.PROMOTION:
                 if self._promote(run):
