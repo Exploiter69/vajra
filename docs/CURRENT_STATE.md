@@ -92,7 +92,7 @@ The model is inside VAJRA, never above VAJRA.
 | Phase 13 — Always-on control plane | COMPLETE / CLOSED | daemon, durable queue, human controls, scheduling, API |
 | Phase 14 — Engineering Memory | COMPLETE / CLOSED | failure, repository, context memory and conflict awareness |
 | Phase 15 — Production Hardening | COMPLETE / CLOSED | security, resource controls, observability; final local gate passed |
-| Phase 16 — Advanced Autonomy | COMPLETE / CLOSED | multi-step, multi-repository, specialized workers, durable long-horizon bounds; 9 dedicated tests and 661 portable-suite tests passed |
+| Phase 16 — Advanced Autonomy | COMPLETE / CLOSED | multi-step, multi-repository, specialized workers, durable stage recovery and persisted long-horizon budget accounting; Phase 16/17/13 CI gates passed |
 | Phase 17 — Controlled Self-Improvement | COMPLETE / LOCAL GATE PASSED | bounded improvement proposals, protected authority surfaces, isolated verification/security gates, explicit human promotion, durable journal |
 
 ---
@@ -339,7 +339,7 @@ The Phase 16 layer does not authorize execution, mutate canonical Run state dire
 4. Run #3 uses the standard-library SQLite store for canonical Run snapshots and lifecycle events. Its shared-store transaction boundary covers RunManager transitions, loop evidence recording, and worker-result acceptance.
 5. The authenticated Kaggle Qwen worker path is exercised by the successful Run #4; Kaggle runtimes and quick tunnels remain ephemeral and are not treated as permanent infrastructure.
 6. The autonomous loop now restores its reasoning plan from an integrity-checked durable `AUTONOMY_PLAN` event and reconstructs the intent cursor from accepted-worker evidence. Restart regression tests prove continuation after a durably accepted intent without replay, and fail closed to human intervention when a running attempt has an ambiguous outcome. This does not claim safe automatic replay for every possible external side effect or machine-loss scenario.
-7. The separate local durable runtime remains a development/reference implementation, not a distributed production durability backend.
+7. The separate local durable runtime remains a development/reference implementation, not a distributed production durability backend.\n8. Phase 16 long-horizon attempt/execution-callback counters and the original start time are now persisted in the existing journal, and resumed runs reject changed limit configurations. The engine's `max_replans` field remains reserved because no replan operation exists in that layer; its callback-level `max_model_calls` accounting cannot count multiple model requests hidden inside one callback. The JSONL journal is a single-process local store, not a multi-process/distributed coordination backend.
 
 These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requirements.
 
