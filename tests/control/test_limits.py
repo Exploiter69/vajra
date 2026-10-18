@@ -162,6 +162,28 @@ def test_strategy_loop_escalates_to_human() -> None:
     assert decisions[1].strategy.repeated
 
 
+def test_strategy_repetition_is_detected_across_distinct_step_ids() -> None:
+    controller = BoundedAutonomy()
+    decisions = [
+        controller.assess(
+            make_run(),
+            make_budget(),
+            progress=ProgressObservation(
+                run_id="limits-run",
+                step_id=f"step-{index}",
+                attempt_id=f"attempt-{index}",
+                state_digest=f"state-{index}",
+            ),
+            strategy_id="same-ineffective-strategy",
+        )
+        for index in range(2)
+    ]
+
+    assert decisions[0].action is LimitAction.CONTINUE
+    assert decisions[1].action is LimitAction.WAIT_HUMAN
+    assert decisions[1].strategy is not None
+    assert decisions[1].strategy.repeated
+
 def test_strategy_oscillation_escalates_to_human() -> None:
     controller = BoundedAutonomy()
 
