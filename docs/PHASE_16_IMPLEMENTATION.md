@@ -51,4 +51,4 @@ The Phase 16 gate must pass:
 3. `python -m compileall -q src tests`;
 4. `git diff --check`.
 
-Phase 16 is closed: the dedicated suite passed 9 tests; the portable full suite passed 661 tests with 4 gVisor tests deselected; compile and diff checks passed.
+Phase 16 remains closed. The dedicated suite, portable full suite (with gVisor integration excluded where required), compile check, and diff check are enforced by CI on changes.
