@@ -573,7 +573,11 @@ class AutonomousEngineeringLoop:
         self._previous_workspace_digest = after
         self._emit(LoopPhase.MEASURE_PROGRESS, run.run_id, {"changed": measurement.changed, "verification_passed": passed, "verification_failed": failed, "verification_inconclusive": inconclusive})
         if self._repeated_failed_command_count >= 2 or self._repeated_failed_verification_count >= 2:
-            reason = "identical verification failures repeated without workspace progress; human diagnosis required"
+            reason = (
+                "identical verification failures repeated without workspace progress; human diagnosis required"
+                if self._repeated_failed_verification_count >= 2
+                else "identical verification command failure repeated; human diagnosis required"
+            )
             self._emit(LoopPhase.WAIT_HUMAN, run.run_id, {
                 "reason": reason,
                 "failure_signature": failure_signature or signature,
