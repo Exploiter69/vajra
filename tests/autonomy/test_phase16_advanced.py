@@ -165,7 +165,7 @@ def test_restart_refuses_to_replay_ambiguous_stage(tmp_path: Path, ambiguous_sta
     with pytest.raises(AdvancedAutonomyError, match="human reconciliation required"):
         restarted.execute(
             objective,
-            execute_stage=lambda stage, worker: calls.append(("execute", stage.stage_id),
+            execute_stage=lambda stage, worker: calls.append(("execute", stage.stage_id)),
             verify_stage=lambda stage, result: calls.append(("verify", stage.stage_id)) or (True, ("evidence",)),
         )
 
