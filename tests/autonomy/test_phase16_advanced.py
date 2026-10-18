@@ -171,3 +171,45 @@ def test_restart_refuses_to_replay_ambiguous_stage(tmp_path: Path, ambiguous_sta
 
     assert calls == [], "ambiguous in-flight stages must not be replayed automatically"
 
+
+
+def test_attempt_and_execution_budgets_survive_engine_restart(tmp_path: Path):
+    journal = tmp_path / "durable-budget.jsonl"
+    objective = MultiStepObjective(
+        "budgeted", "bounded work",
+        (AdvancedStage("a", "A", "first"), AdvancedStage("b", "B", "second", depends_on=("a",))),
+        (repo("r"),),
+    )
+    limits = LongHorizonLimits(max_attempts=1, max_model_calls=10)
+    first = AdvancedAutonomyEngine(store=AdvancedRunStore(journal), limits=limits)
+    calls = []
+    with pytest.raises(AdvancedAutonomyError, match="attempt bound"):
+        first.execute(
+            objective,
+            execute_stage=lambda stage, worker: calls.append(stage.stage_id) or stage.stage_id,
+            verify_stage=lambda stage, result: (True, (f"e-{stage.stage_id}",)),
+        )
+    assert calls == ["a"]
+    persisted = AdvancedRunStore(journal).budget("budgeted")
+    assert persisted["attempts"] == 1
+    assert persisted["model_calls"] == 1
+
+
+def test_model_call_budget_is_reserved_before_execution_callback(tmp_path: Path):
+    journal = tmp_path / "model-budget.jsonl"
+    objective = MultiStepObjective("model-budget", "bounded model work", (AdvancedStage("a", "A", "first"),), (repo("r"),))
+    engine = AdvancedAutonomyEngine(
+        store=AdvancedRunStore(journal),
+        limits=LongHorizonLimits(max_model_calls=1),
+    )
+    # Exhaust the durable execution-call budget before any stage callback runs.
+    store = engine.store
+    store.reserve_stage_execution("model-budget", engine.limits)
+    calls = []
+    with pytest.raises(AdvancedAutonomyError, match="model-call bound"):
+        engine.execute(
+            objective,
+            execute_stage=lambda stage, worker: calls.append(stage.stage_id),
+            verify_stage=lambda stage, result: (True, ("evidence",)),
+        )
+    assert calls == []
