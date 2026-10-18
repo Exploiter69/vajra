@@ -229,9 +229,12 @@ def test_phase10_halts_on_repeated_verification_failure_without_progress(tmp_pat
             )
 
     loop._verifier = AlwaysFailingVerifier()
-    result = loop.run("phase10-run")
+    run = manager.get_run("phase10-run")
 
-    assert result.waiting_human is True
+    assert loop._verify(run) is True
+    assert manager.get_run("phase10-run").state.value == "CREATED"
+    assert loop._verify(manager.get_run("phase10-run")) is False
+
     assert manager.get_run("phase10-run").state.value == "WAITING_HUMAN"
     assert loop._repeated_failed_verification_count >= 2
 
