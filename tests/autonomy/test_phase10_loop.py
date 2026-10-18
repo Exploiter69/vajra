@@ -12,6 +12,7 @@ from vajra.control.controller import Controller
 from vajra.control.contracts import AcceptanceCriteria, AcceptancePredicate, stable_digest
 from vajra.control.limits import BoundedAutonomy
 from vajra.domain import Budget
+from vajra.domain.models import VerificationResult, VerificationStatus
 from vajra.execution.broker import ExecutionBroker
 from vajra.execution.contracts import ExecutionResult, ExecutionStatus
 from vajra.policy.contracts import PolicyDecisionType
@@ -20,7 +21,7 @@ from vajra.runtime.event_store import InMemoryEventStore
 from vajra.runtime.run_manager import RunManager
 from vajra.runtime.state_store import InMemoryStateStore
 from vajra.verification.environment import VerificationEnvironment
-from vajra.verification.independent import IndependentVerifier
+from vajra.verification.independent import IndependentVerificationReport, IndependentVerifier
 from vajra.verification.plan import AcceptanceCriteriaCompiler
 from vajra.verification.independent import SubprocessVerificationExecutor
 
@@ -206,6 +207,38 @@ def test_phase10_respects_hard_cycle_bound(tmp_path):
     assert result.completed is False
     assert manager.get_run("phase10-run").state.value in {"QUEUED", "CREATED"}
 
+
+
+def test_phase10_halts_on_repeated_verification_failure_without_progress(tmp_path):
+    loop, manager, _ = build_loop(tmp_path)
+
+    class AlwaysFailingVerifier:
+        def verify(self, plan, *, run_id, step_id, attempt_id, environment):
+            return IndependentVerificationReport(
+                verification_results=(
+                    VerificationResult(
+                        verification_id="stable-failure",
+                        run_id=run_id,
+                        status=VerificationStatus.FAILED,
+                        checks=({"check": "acceptance", "subject": "required behavior", "passed": False},),
+                        verifier_version="test-verifier",
+                    ),
+                ),
+                evidence=(),
+                output=("stable failure",),
+            )
+
+    loop._verifier = AlwaysFailingVerifier()
+    result = loop.run("phase10-run")
+
+    assert result.waiting_human is True
+    assert manager.get_run("phase10-run").state.value == "WAITING_HUMAN"
+    wait_events = [
+        event for event in manager.events("phase10-run")
+        if event.event_type == "AUTONOMY_WAIT_HUMAN"
+    ]
+    assert wait_events
+    assert "identical verification failures repeated without workspace progress" in wait_events[-1].payload["reason"]
 
 def test_phase10_records_full_control_plane_trace(tmp_path):
     loop, manager, _ = build_loop(tmp_path)
