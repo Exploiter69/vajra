@@ -28,9 +28,9 @@ This is deliberately not a swarm. Workers remain subordinate resources; Policy, 
 
 ## 16D — Complex / long-horizon objectives
 
-`LongHorizonLimits` provides hard bounds for stages, replans, model-call budget declaration, attempts, and wall-clock runtime. `AdvancedRunStore` is an append-only fsync-backed JSONL stage checkpoint journal.
+`LongHorizonLimits` provides bounds for stages, execution-call units, attempts, and wall-clock runtime. Attempt and execution-call budgets plus the original UTC start time are durably recorded in the same append-only fsync-backed JSONL journal and survive engine/process restarts. A stage attempt and one execution-call unit are reserved before the execution callback, so a crash can consume budget but cannot bypass it. The callback API cannot count multiple model requests made internally by a callback. `max_replans` is currently a reserved configuration field: this engine has no replan operation to count, so it is not represented as an enforced bound.
 
-A resumed engine reconstructs completed stages from durable checkpoints and skips them. If the latest checkpoint for any stage is `RUNNING` or `VERIFYING`, restart fails closed and requires human reconciliation rather than automatically replaying a potentially side-effecting operation. Failed verification never creates a completion checkpoint. Bound exhaustion fails closed.
+A resumed engine reconstructs completed stages from durable checkpoints and skips them. If the latest checkpoint for any stage is `RUNNING` or `VERIFYING`, restart fails closed and requires human reconciliation rather than automatically replaying a potentially side-effecting operation. Failed verification never creates a completion checkpoint. Durable attempt, execution-call, and wall-clock exhaustion fail closed.
 
 The long-horizon layer is therefore resumable rather than dependent on one process, model session, or worker lifetime.
 
@@ -51,4 +51,4 @@ The Phase 16 gate must pass:
 3. `python -m compileall -q src tests`;
 4. `git diff --check`.
 
-Phase 16 is closed: the dedicated suite passed 9 tests; the portable full suite passed 661 tests with 4 gVisor tests deselected; compile and diff checks passed.
+Phase 16 remains closed. The dedicated suite, portable full suite (with gVisor integration excluded where required), compile check, and diff check are enforced by CI on changes.

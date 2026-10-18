@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from threading import RLock
-from time import monotonic
 from typing import Any, Callable
 
 
@@ -163,6 +162,7 @@ class AdvancedRunStore:
         self._lock = RLock()
         self._sequence = 1
         self._state: dict[tuple[str, str], StageCheckpoint] = {}
+        self._budgets: dict[str, dict[str, Any]] = {}
         self._load()
 
     def record(self, checkpoint: StageCheckpoint) -> StageCheckpoint:
@@ -183,6 +183,64 @@ class AdvancedRunStore:
         with self._lock:
             return tuple(sorted((v for (oid, _), v in self._state.items() if oid == objective_id), key=lambda x: x.stage_id))
 
+    def budget(
+        self, objective_id: str, limits: LongHorizonLimits | None = None
+    ) -> dict[str, Any]:
+        """Return durable run accounting, creating its start record once."""
+        with self._lock:
+            existing = self._budgets.get(objective_id)
+            if existing is None:
+                configured = limits or LongHorizonLimits()
+                limit_values = {
+                    "max_stages": configured.max_stages,
+                    "max_replans": configured.max_replans,
+                    "max_model_calls": configured.max_model_calls,
+                    "max_attempts": configured.max_attempts,
+                    "max_wall_clock_seconds": configured.max_wall_clock_seconds,
+                }
+                existing = {
+                    "objective_id": objective_id,
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                    "attempts": 0,
+                    "model_calls": 0,
+                    "replans": 0,
+                    "limits": limit_values,
+                }
+                self._append({"record_type": "budget", **existing})
+            elif limits is not None:
+                requested = {
+                    "max_stages": limits.max_stages,
+                    "max_replans": limits.max_replans,
+                    "max_model_calls": limits.max_model_calls,
+                    "max_attempts": limits.max_attempts,
+                    "max_wall_clock_seconds": limits.max_wall_clock_seconds,
+                }
+                if existing.get("limits") != requested:
+                    raise AdvancedAutonomyError(
+                        "long-horizon limits differ from the durable run configuration"
+                    )
+            return dict(self._budgets[objective_id])
+
+    def reserve_stage_execution(self, objective_id: str, limits: LongHorizonLimits) -> dict[str, Any]:
+        """Durably charge a stage attempt and execution-call unit before side effects."""
+        with self._lock:
+            budget = self.budget(objective_id, limits)
+            started_at = datetime.fromisoformat(str(budget["started_at"]))
+            elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
+            if elapsed >= limits.max_wall_clock_seconds:
+                raise AdvancedAutonomyError("long-horizon wall-clock bound exceeded")
+            if int(budget["attempts"]) >= limits.max_attempts:
+                raise AdvancedAutonomyError("long-horizon attempt bound exceeded")
+            if int(budget["model_calls"]) >= limits.max_model_calls:
+                raise AdvancedAutonomyError("long-horizon model-call bound exceeded")
+            updated = {
+                **budget,
+                "attempts": int(budget["attempts"]) + 1,
+                "model_calls": int(budget["model_calls"]) + 1,
+            }
+            self._append({"record_type": "budget", **updated})
+            return dict(self._budgets[objective_id])
+
     def _append(self, record: dict[str, Any]) -> None:
         record["journal_sequence"] = self._sequence
         self._path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,6 +252,16 @@ class AdvancedRunStore:
         self._sequence += 1
 
     def _apply(self, record: dict[str, Any]) -> None:
+        if record.get("record_type") == "budget":
+            self._budgets[record["objective_id"]] = {
+                "objective_id": record["objective_id"],
+                "started_at": record["started_at"],
+                "attempts": int(record["attempts"]),
+                "model_calls": int(record["model_calls"]),
+                "replans": int(record.get("replans", 0)),
+                "limits": record.get("limits"),
+            }
+            return
         checkpoint = StageCheckpoint(
             record["objective_id"], record["stage_id"], StageState(record["state"]),
             int(record["sequence"]), record["recorded_at"], tuple(record.get("evidence_refs", ())),
@@ -293,11 +361,11 @@ class AdvancedAutonomyEngine:
                 "long-horizon restart found ambiguous in-flight stage checkpoint(s): "
                 f"{details}; human reconciliation required, refusing automatic replay"
             )
-        started = monotonic()
-        attempts = 0
-        model_calls = 0
+        self.store.budget(objective.objective_id, self.limits)
         while True:
-            if monotonic() - started >= self.limits.max_wall_clock_seconds:
+            budget = self.store.budget(objective.objective_id, self.limits)
+            started_at = datetime.fromisoformat(str(budget["started_at"]))
+            if (datetime.now(timezone.utc) - started_at).total_seconds() >= self.limits.max_wall_clock_seconds:
                 raise AdvancedAutonomyError("long-horizon wall-clock bound exceeded")
             ready = self.next_stages(objective)
             if not ready:
@@ -307,9 +375,6 @@ class AdvancedAutonomyEngine:
                     return self.store.latest(objective.objective_id)
                 raise AdvancedAutonomyError("no ready stage; objective is blocked")
             for stage in ready:
-                attempts += 1
-                if attempts > self.limits.max_attempts:
-                    raise AdvancedAutonomyError("long-horizon attempt bound exceeded")
                 worker = None
                 if len(stage.worker_roles) > 1:
                     raise AdvancedAutonomyError(
@@ -321,6 +386,7 @@ class AdvancedAutonomyEngine:
                             f"stage {stage.stage_id} requires a specialized worker"
                         )
                     worker = worker_registry.select(stage.worker_roles[0], worker_capabilities)
+                self.store.reserve_stage_execution(objective.objective_id, self.limits)
                 running = _checkpoint(
                     objective.objective_id, stage, StageState.RUNNING,
                     _next_sequence(latest), worker
@@ -329,9 +395,6 @@ class AdvancedAutonomyEngine:
                 latest[stage.stage_id] = running
                 try:
                     result = execute_stage(stage, worker)
-                    model_calls += 1
-                    if model_calls > self.limits.max_model_calls:
-                        raise AdvancedAutonomyError("long-horizon model-call bound exceeded")
                     verifying = _checkpoint(
                         objective.objective_id, stage, StageState.VERIFYING,
                         _next_sequence(latest), worker

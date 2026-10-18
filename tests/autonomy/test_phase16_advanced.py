@@ -110,7 +110,7 @@ def test_failed_verification_never_marks_stage_complete(tmp_path: Path):
     assert all(c.state is not StageState.COMPLETE for c in states)
 
 
-def test_replan_bound_and_stage_bound_are_hard(tmp_path: Path):
+def test_stage_bound_is_hard(tmp_path: Path):
     objective = MultiStepObjective("o", "many", tuple(AdvancedStage(str(i), str(i), str(i)) for i in range(2)), (repo("r"),))
     engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "advanced.jsonl"), limits=LongHorizonLimits(max_stages=1))
     with pytest.raises(AdvancedAutonomyError, match="stage count"):
@@ -171,3 +171,54 @@ def test_restart_refuses_to_replay_ambiguous_stage(tmp_path: Path, ambiguous_sta
 
     assert calls == [], "ambiguous in-flight stages must not be replayed automatically"
 
+
+
+def test_attempt_and_execution_budgets_survive_engine_restart(tmp_path: Path):
+    journal = tmp_path / "durable-budget.jsonl"
+    objective = MultiStepObjective(
+        "budgeted", "bounded work",
+        (AdvancedStage("a", "A", "first"), AdvancedStage("b", "B", "second", depends_on=("a",))),
+        (repo("r"),),
+    )
+    limits = LongHorizonLimits(max_attempts=1, max_model_calls=10)
+    first = AdvancedAutonomyEngine(store=AdvancedRunStore(journal), limits=limits)
+    calls = []
+    with pytest.raises(AdvancedAutonomyError, match="attempt bound"):
+        first.execute(
+            objective,
+            execute_stage=lambda stage, worker: calls.append(stage.stage_id) or stage.stage_id,
+            verify_stage=lambda stage, result: (True, (f"e-{stage.stage_id}",)),
+        )
+    assert calls == ["a"]
+    persisted = AdvancedRunStore(journal).budget("budgeted")
+    assert persisted["attempts"] == 1
+    assert persisted["model_calls"] == 1
+    with pytest.raises(AdvancedAutonomyError, match="limits differ"):
+        AdvancedAutonomyEngine(
+            store=AdvancedRunStore(journal),
+            limits=LongHorizonLimits(max_attempts=2, max_model_calls=10),
+        ).execute(
+            objective,
+            execute_stage=lambda stage, worker: pytest.fail("changed limits must be rejected"),
+            verify_stage=lambda stage, result: (True, ("evidence",)),
+        )
+
+
+def test_model_call_budget_is_reserved_before_execution_callback(tmp_path: Path):
+    journal = tmp_path / "model-budget.jsonl"
+    objective = MultiStepObjective("model-budget", "bounded model work", (AdvancedStage("a", "A", "first"),), (repo("r"),))
+    engine = AdvancedAutonomyEngine(
+        store=AdvancedRunStore(journal),
+        limits=LongHorizonLimits(max_model_calls=1),
+    )
+    # Exhaust the durable execution-call budget before any stage callback runs.
+    store = engine.store
+    store.reserve_stage_execution("model-budget", engine.limits)
+    calls = []
+    with pytest.raises(AdvancedAutonomyError, match="model-call bound"):
+        engine.execute(
+            objective,
+            execute_stage=lambda stage, worker: calls.append(stage.stage_id),
+            verify_stage=lambda stage, result: (True, ("evidence",)),
+        )
+    assert calls == []
