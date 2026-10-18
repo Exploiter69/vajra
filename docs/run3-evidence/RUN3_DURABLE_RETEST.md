@@ -14,7 +14,12 @@ This retest changes the controller's canonical run/event backend to SQLite. Kagg
 - SQLite can be closed and reopened without losing the persisted run snapshot or event sequence.
 - Remote inference requires a bearer token of at least 32 characters. Health/capability discovery is public metadata; `POST /infer` is authenticated.
 
-This does **not** yet prove automatic continuation of an interrupted autonomous loop. The reasoning plan and in-process intent cursor are not yet restored from durable checkpoints. A persisted Run is not, by itself, proof that every in-flight operation is safely resumable.
+The physical retest described here is not, by itself, proof of restart recovery. The current implementation and automated regression tests separately cover two restart cases in `tests/runtime/test_run3_local_replay.py`:
+
+- After a worker result is durably accepted, a reconstructed loop restores the integrity-checked plan/cursor, continues with the next intent, and does not dispatch the accepted intent twice.
+- If a process stops while an attempt is still `RUNNING`, the outcome is treated as ambiguous; VAJRA transitions to `WAITING_HUMAN` rather than blindly replaying the operation.
+
+These tests prove those bounded cases, not safe automatic replay after every possible external side effect or every machine-loss scenario. A persisted Run is not, by itself, proof that every in-flight operation is safely resumable.
 
 ## Kaggle worker steps
 

@@ -336,9 +336,9 @@ The Phase 16 layer does not authorize execution, mutate canonical Run state dire
 1. Oracle-hosted infrastructure remains unproven because the project is constrained to ₹0.00/no paid infrastructure.
 2. Physical gVisor proof is environment-specific and is not reproduced by hosted CI.
 3. Real multi-day soak campaigns require an operator to leave the runner executing for the selected elapsed duration. Accelerated CI cannot prove elapsed-time behavior.
-4. Run #3 now uses the standard-library SQLite store for canonical Run snapshots and lifecycle events. Its shared-store transaction boundary covers RunManager transitions, loop evidence recording, and worker-result acceptance.
-5. The authenticated Kaggle Qwen worker, native llama.cpp build, and temporary tunnel are prepared in `infra/kaggle/vajra_qwen3_coder_t4x2.ipynb`; the physical GPU/model/tunnel retest is still pending operator execution.
-6. SQLite persistence does not yet restore the in-process reasoning plan and intent cursor after arbitrary process loss. Automatic continuation of an interrupted Run #3 is not claimed.
+4. Run #3 uses the standard-library SQLite store for canonical Run snapshots and lifecycle events. Its shared-store transaction boundary covers RunManager transitions, loop evidence recording, and worker-result acceptance.
+5. The authenticated Kaggle Qwen worker path is exercised by the successful Run #4; Kaggle runtimes and quick tunnels remain ephemeral and are not treated as permanent infrastructure.
+6. The autonomous loop now restores its reasoning plan from an integrity-checked durable `AUTONOMY_PLAN` event and reconstructs the intent cursor from accepted-worker evidence. Restart regression tests prove continuation after a durably accepted intent without replay, and fail closed to human intervention when a running attempt has an ambiguous outcome. This does not claim safe automatic replay for every possible external side effect or machine-loss scenario.
 7. The separate local durable runtime remains a development/reference implementation, not a distributed production durability backend.
 
 These are explicit infrastructure/evidence boundaries, not hidden Phase 12 requirements.
