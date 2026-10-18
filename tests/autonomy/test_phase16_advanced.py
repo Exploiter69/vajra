@@ -110,7 +110,7 @@ def test_failed_verification_never_marks_stage_complete(tmp_path: Path):
     assert all(c.state is not StageState.COMPLETE for c in states)
 
 
-def test_replan_bound_and_stage_bound_are_hard(tmp_path: Path):
+def test_stage_bound_is_hard(tmp_path: Path):
     objective = MultiStepObjective("o", "many", tuple(AdvancedStage(str(i), str(i), str(i)) for i in range(2)), (repo("r"),))
     engine = AdvancedAutonomyEngine(store=AdvancedRunStore(tmp_path / "advanced.jsonl"), limits=LongHorizonLimits(max_stages=1))
     with pytest.raises(AdvancedAutonomyError, match="stage count"):
@@ -193,6 +193,15 @@ def test_attempt_and_execution_budgets_survive_engine_restart(tmp_path: Path):
     persisted = AdvancedRunStore(journal).budget("budgeted")
     assert persisted["attempts"] == 1
     assert persisted["model_calls"] == 1
+    with pytest.raises(AdvancedAutonomyError, match="limits differ"):
+        AdvancedAutonomyEngine(
+            store=AdvancedRunStore(journal),
+            limits=LongHorizonLimits(max_attempts=2, max_model_calls=10),
+        ).execute(
+            objective,
+            execute_stage=lambda stage, worker: pytest.fail("changed limits must be rejected"),
+            verify_stage=lambda stage, result: (True, ("evidence",)),
+        )
 
 
 def test_model_call_budget_is_reserved_before_execution_callback(tmp_path: Path):
