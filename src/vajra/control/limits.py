@@ -81,9 +81,11 @@ class BoundedAutonomy:
         strategy_assessment = None
 
         if strategy_id is not None:
+            # Recovery replans can assign a fresh step ID to every attempt.
+            # Strategy repetition is a run-level safety signal, not step-local.
             strategy_assessment = self._strategy.observe(
                 run_id=run.run_id,
-                step_id=progress.step_id if progress is not None else "__run__",
+                step_id="__run__",
                 strategy_id=strategy_id,
             )
 
