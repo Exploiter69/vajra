@@ -183,25 +183,48 @@ class AdvancedRunStore:
         with self._lock:
             return tuple(sorted((v for (oid, _), v in self._state.items() if oid == objective_id), key=lambda x: x.stage_id))
 
-    def budget(self, objective_id: str) -> dict[str, Any]:
+    def budget(
+        self, objective_id: str, limits: LongHorizonLimits | None = None
+    ) -> dict[str, Any]:
         """Return durable run accounting, creating its start record once."""
         with self._lock:
             existing = self._budgets.get(objective_id)
             if existing is None:
+                configured = limits or LongHorizonLimits()
+                limit_values = {
+                    "max_stages": configured.max_stages,
+                    "max_replans": configured.max_replans,
+                    "max_model_calls": configured.max_model_calls,
+                    "max_attempts": configured.max_attempts,
+                    "max_wall_clock_seconds": configured.max_wall_clock_seconds,
+                }
                 existing = {
                     "objective_id": objective_id,
                     "started_at": datetime.now(timezone.utc).isoformat(),
                     "attempts": 0,
                     "model_calls": 0,
                     "replans": 0,
+                    "limits": limit_values,
                 }
                 self._append({"record_type": "budget", **existing})
+            elif limits is not None:
+                requested = {
+                    "max_stages": limits.max_stages,
+                    "max_replans": limits.max_replans,
+                    "max_model_calls": limits.max_model_calls,
+                    "max_attempts": limits.max_attempts,
+                    "max_wall_clock_seconds": limits.max_wall_clock_seconds,
+                }
+                if existing.get("limits") != requested:
+                    raise AdvancedAutonomyError(
+                        "long-horizon limits differ from the durable run configuration"
+                    )
             return dict(self._budgets[objective_id])
 
     def reserve_stage_execution(self, objective_id: str, limits: LongHorizonLimits) -> dict[str, Any]:
         """Durably charge a stage attempt and execution-call unit before side effects."""
         with self._lock:
-            budget = self.budget(objective_id)
+            budget = self.budget(objective_id, limits)
             started_at = datetime.fromisoformat(str(budget["started_at"]))
             elapsed = (datetime.now(timezone.utc) - started_at).total_seconds()
             if elapsed >= limits.max_wall_clock_seconds:
@@ -236,6 +259,7 @@ class AdvancedRunStore:
                 "attempts": int(record["attempts"]),
                 "model_calls": int(record["model_calls"]),
                 "replans": int(record.get("replans", 0)),
+                "limits": record.get("limits"),
             }
             return
         checkpoint = StageCheckpoint(
@@ -337,9 +361,9 @@ class AdvancedAutonomyEngine:
                 "long-horizon restart found ambiguous in-flight stage checkpoint(s): "
                 f"{details}; human reconciliation required, refusing automatic replay"
             )
-        self.store.budget(objective.objective_id)
+        self.store.budget(objective.objective_id, self.limits)
         while True:
-            budget = self.store.budget(objective.objective_id)
+            budget = self.store.budget(objective.objective_id, self.limits)
             started_at = datetime.fromisoformat(str(budget["started_at"]))
             if (datetime.now(timezone.utc) - started_at).total_seconds() >= self.limits.max_wall_clock_seconds:
                 raise AdvancedAutonomyError("long-horizon wall-clock bound exceeded")
