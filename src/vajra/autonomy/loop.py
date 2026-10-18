@@ -109,6 +109,24 @@ class _RunStateRecorder:
         return self._events.append(event)
 
 
+def _verification_failure_signature(results: tuple) -> str | None:
+    """Return a stable signature for failed checks, excluding volatile output."""
+    failures: list[tuple[object, ...]] = []
+    for result in results:
+        if result.status.value not in {"FAILED", "INCONCLUSIVE"}:
+            continue
+        checks = tuple(sorted((
+            str(check.get("check", "check")),
+            str(check.get("subject", "")),
+            str(check.get("needle", "")),
+            repr(check.get("command")),
+            str(check.get("failure_class", "")),
+        ) for check in result.checks if check.get("passed") is False))
+        if not checks:
+            checks = ((result.verification_id, result.status.value, "", "", ""),)
+        failures.append((result.verification_id, result.status.value, checks))
+    return _digest(repr(tuple(failures))) if failures else None
+
 class AutonomousEngineeringLoop:
     VERSION = "autonomous-engineering-loop-v1"
 
@@ -147,6 +165,9 @@ class AutonomousEngineeringLoop:
         self._previous_workspace_digest = self._workspace_digest()
         self._last_failed_command_signature: str | None = None
         self._repeated_failed_command_count = 0
+        self._last_failed_verification_signature: str | None = None
+        self._last_failed_verification_workspace_digest: str | None = None
+        self._repeated_failed_verification_count = 0
         self._durable_state_restored = False
         self._restored_plan_is_replan = False
 
@@ -537,6 +558,13 @@ class AutonomousEngineeringLoop:
         self._recorder.record_verification(run.run_id, report.verification_results, report.evidence)
         before = self._previous_workspace_digest
         after = self._workspace_digest()
+        failure_signature = _verification_failure_signature(report.verification_results)
+        if failure_signature and failure_signature == self._last_failed_verification_signature and after == self._last_failed_verification_workspace_digest:
+            self._repeated_failed_verification_count += 1
+        else:
+            self._repeated_failed_verification_count = 1 if failure_signature else 0
+        self._last_failed_verification_signature = failure_signature
+        self._last_failed_verification_workspace_digest = after if failure_signature else None
         passed = sum(r.status.value == "PASSED" for r in report.verification_results)
         failed = sum(r.status.value == "FAILED" for r in report.verification_results)
         inconclusive = sum(r.status.value == "INCONCLUSIVE" for r in report.verification_results)
@@ -544,12 +572,13 @@ class AutonomousEngineeringLoop:
         self._progress.append(measurement)
         self._previous_workspace_digest = after
         self._emit(LoopPhase.MEASURE_PROGRESS, run.run_id, {"changed": measurement.changed, "verification_passed": passed, "verification_failed": failed, "verification_inconclusive": inconclusive})
-        if self._repeated_failed_command_count >= 2:
-            reason = "identical verification command failure repeated without a changed failure signature; human diagnosis required"
+        if self._repeated_failed_command_count >= 2 or self._repeated_failed_verification_count >= 2:
+            reason = "identical verification failures repeated without workspace progress; human diagnosis required"
             self._emit(LoopPhase.WAIT_HUMAN, run.run_id, {
                 "reason": reason,
-                "failure_signature": signature,
-                "repeated_failure_count": self._repeated_failed_command_count,
+                "failure_signature": failure_signature or signature,
+                "repeated_command_failure_count": self._repeated_failed_command_count,
+                "repeated_verification_failure_count": self._repeated_failed_verification_count,
             })
             self.run_manager.transition(run.run_id, RunState.WAITING_HUMAN, TransitionActor.CONTROLLER, reason=reason)
             return False
