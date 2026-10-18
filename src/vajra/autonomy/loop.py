@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import subprocess
 from copy import deepcopy
 from dataclasses import dataclass
@@ -146,8 +147,31 @@ class AutonomousEngineeringLoop:
         self._previous_workspace_digest = self._workspace_digest()
         self._last_failed_command_signature: str | None = None
         self._repeated_failed_command_count = 0
+        self._durable_state_restored = False
+        self._restored_plan_is_replan = False
 
     def run(self, run_id: str) -> LoopResult:
+        if not self._durable_state_restored:
+            self._durable_state_restored = True
+            initial_run = self.run_manager.get_run(run_id)
+            if initial_run.state in {RunState.EXECUTING, RunState.RECOVERING}:
+                recovery_problem = self._restore_durable_plan(initial_run)
+                if recovery_problem:
+                    reason = (
+                        "Autonomous-loop restart was stopped safely: "
+                        f"{recovery_problem}. Human intervention is required; no intent was redispatched."
+                    )
+                    self.run_manager.transition(
+                        run_id, RunState.WAITING_HUMAN, TransitionActor.CONTROLLER, reason=reason
+                    )
+                    self._emit(LoopPhase.WAIT_HUMAN, run_id, {
+                        "failed_phase": "durable resumption",
+                        "reason": reason,
+                    })
+                    return LoopResult(
+                        run_id, LoopPhase.WAIT_HUMAN, 0, False, True, False,
+                        reason, tuple(self._progress)
+                    )
         for cycle in range(1, self._max_cycles + 1):
             run = self.run_manager.get_run(run_id)
             self._emit(LoopPhase.OBJECTIVE, run_id, {"cycle": cycle, "state": run.state.value})
@@ -219,12 +243,19 @@ class AutonomousEngineeringLoop:
                     self.run_manager.recover_run(run_id)
                 continue
             if run.state is RunState.RECOVERING:
+                if self._restored_plan_is_replan:
+                    self.run_manager.transition(
+                        run_id, RunState.EXECUTING, TransitionActor.CONTROLLER,
+                        reason="resume persisted recovery plan after restart",
+                    )
+                    self._restored_plan_is_replan = False
+                    continue
                 failure_reason = self._verification_failure_reason()
                 try:
                     self._replan_after_recovery(run, failure_reason)
                 except ReasoningUnavailableError as exc:
                     return self._wait_for_reasoning_failure(run, cycle, "recovery replanning", exc)
-                self.run_manager.transition(run_id, RunState.PLANNING, TransitionActor.CONTROLLER, reason="recovery produced a new bounded plan")
+                self.run_manager.transition(run_id, RunState.EXECUTING, TransitionActor.CONTROLLER, reason="recovery produced a new bounded plan")
                 continue
             if run.state is RunState.PROMOTION:
                 if self._promote(run):
@@ -251,7 +282,141 @@ class AutonomousEngineeringLoop:
             raise AutonomousLoopError("reasoning plan was generated from stale or different context")
         self._plan = plan
         self._intent_cursor = 0
-        self._emit(LoopPhase.PLAN, run.run_id, {"plan_id": plan.plan_id, "context_digest": plan.context_digest, "intent_count": len(plan.intents)})
+        self._emit(LoopPhase.PLAN, run.run_id, self._durable_plan_event_payload(plan))
+
+    @staticmethod
+    def _durable_plan_payload(plan: EngineeringPlan) -> dict[str, object]:
+        return {
+            "plan_id": plan.plan_id,
+            "context_digest": plan.context_digest,
+            "strategy_id": plan.strategy_id,
+            "intents": [
+                {
+                    "intent_id": intent.intent_id,
+                    "operation": intent.operation,
+                    "parameters": intent.parameters,
+                    "requested_capabilities": list(intent.requested_capabilities),
+                    "reason": intent.reason,
+                    "strategy_id": intent.strategy_id,
+                }
+                for intent in plan.intents
+            ],
+        }
+
+    def _durable_plan_event_payload(self, plan: EngineeringPlan) -> dict[str, object]:
+        plan_payload = self._durable_plan_payload(plan)
+        canonical = json.dumps(plan_payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return {
+            "plan_id": plan.plan_id,
+            "context_digest": plan.context_digest,
+            "intent_count": len(plan.intents),
+            "replan": False,
+            "plan_payload": plan_payload,
+            "plan_digest": _digest(canonical),
+        }
+
+    def _restore_durable_plan(self, run: EngineeringRun) -> str | None:
+        """Restore a plan only from an integrity-checked durable event; fail closed on ambiguity."""
+        events = self.run_manager.events(run.run_id)
+        plan_events = [
+            event for event in events
+            if event.event_type == "AUTONOMY_PLAN"
+        ]
+        if not plan_events:
+            return "no durable AUTONOMY_PLAN event exists for this run"
+        plan_event = plan_events[-1]
+        raw = plan_event.payload.get("plan_payload")
+        expected_digest = plan_event.payload.get("plan_digest")
+        if not isinstance(raw, dict) or not isinstance(expected_digest, str):
+            return "latest plan event does not contain a complete durable plan"
+        canonical = json.dumps(raw, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        if _digest(canonical) != expected_digest:
+            return "durable plan integrity digest does not match"
+        try:
+            raw_intents = raw["intents"]
+            if not isinstance(raw_intents, list) or not raw_intents:
+                return "durable plan has no intents"
+            intents = tuple(
+                PlannedIntent(
+                    intent_id=item["intent_id"],
+                    operation=item["operation"],
+                    parameters=item.get("parameters", {}),
+                    requested_capabilities=tuple(item.get("requested_capabilities", ())),
+                    reason=item["reason"],
+                    strategy_id=item.get("strategy_id", ""),
+                )
+                for item in raw_intents
+                if isinstance(item, dict)
+            )
+            if len(intents) != len(raw_intents):
+                return "durable plan contains a malformed intent"
+            restored = EngineeringPlan(
+                plan_id=raw["plan_id"],
+                context_digest=raw["context_digest"],
+                strategy_id=raw.get("strategy_id", ""),
+                intents=intents,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            return f"durable plan could not be reconstructed ({type(exc).__name__})"
+        if plan_event.payload.get("plan_id") != restored.plan_id:
+            return "durable plan identity conflicts with its event envelope"
+
+        self._plan = restored
+        self._intent_cursor = 0
+        self._restored_plan_is_replan = plan_event.payload.get("replan") is True
+        if run.state is RunState.RECOVERING:
+            # Recovery may legitimately follow a known failed attempt. A still-running
+            # attempt is different: its side effects are unknown, so never re-dispatch.
+            planned_steps = {f"step-{item.intent_id}" for item in restored.intents}
+            if any(
+                step.step_id in planned_steps
+                and any(attempt.state.value == "RUNNING" for attempt in step.attempts)
+                for step in run.steps
+            ):
+                return "an attempt remained RUNNING at restart and its outcome is ambiguous"
+            return None
+
+        accepted_after_plan = {
+            (event.step_id, event.attempt_id)
+            for event in events
+            if event.event_type == "WORKER_RESULT_ACCEPTED"
+            and event.sequence > plan_event.sequence
+        }
+        completed: list[bool] = []
+        for planned in restored.intents:
+            step_id = f"step-{planned.intent_id}"
+            step = next((item for item in run.steps if item.step_id == step_id), None)
+            if step is None:
+                completed.append(False)
+                continue
+            if any(attempt.state.value == "RUNNING" for attempt in step.attempts):
+                return f"step {step_id} has a RUNNING attempt whose outcome is ambiguous"
+            current_attempts = [
+                attempt for attempt in step.attempts
+                if any(
+                    event.event_type == "ATTEMPT_STARTED"
+                    and event.step_id == step_id
+                    and event.attempt_id == attempt.attempt_id
+                    and event.sequence > plan_event.sequence
+                    for event in events
+                )
+            ]
+            if not current_attempts:
+                completed.append(False)
+                continue
+            latest_attempt = current_attempts[-1]
+            if latest_attempt.state.value == "SUCCEEDED":
+                if (step_id, latest_attempt.attempt_id) not in accepted_after_plan:
+                    return f"step {step_id} is marked successful without matching worker-acceptance evidence"
+                completed.append(True)
+            elif latest_attempt.state.value in {"FAILED", "ABORTED"}:
+                return f"step {step_id} has a failed/aborted attempt after the saved plan; refusing blind replay"
+            else:
+                return f"step {step_id} has an unrecognized attempt state"
+        if any(completed[index] and not all(completed[:index]) for index in range(len(completed))):
+            return "worker-acceptance evidence is non-contiguous with the plan's intent order"
+        self._intent_cursor = sum(completed)
+        return None
 
     def _verification_failure_reason(self) -> str:
         """Describe concrete independent-verifier failures to guide a bounded replan."""
@@ -288,7 +453,9 @@ class AutonomousEngineeringLoop:
             raise AutonomousLoopError("replan was generated from stale or different context")
         self._intent_cursor = 0
         self._orientation = "replanned after recovery"
-        self._emit(LoopPhase.PLAN, run.run_id, {"replan": True, "plan_id": self._plan.plan_id, "context_digest": context.digest, "recovery_reason": failure_reason})
+        payload = self._durable_plan_event_payload(self._plan)
+        payload.update({"replan": True, "recovery_reason": failure_reason})
+        self._emit(LoopPhase.PLAN, run.run_id, payload)
 
     def _wait_for_reasoning_failure(
         self, run: EngineeringRun, cycle: int, phase: str, exc: Exception

@@ -261,3 +261,128 @@ def test_run3_recovery_replans_with_specific_verification_failures(tmp_path):
     assert "needle=def add(a: int, b: int) -> int:" in reason
     assert "needle=def test_add_existing_behavior() -> None:" in reason
     store.close()
+
+
+
+def _rebuild_run3_loop_after_restart(previous_loop, manager, store):
+    from vajra.autonomy import AutonomousEngineeringLoop
+
+    return AutonomousEngineeringLoop(
+        run_manager=manager,
+        state_store=store,
+        event_store=store,
+        context_engine=previous_loop._context,
+        controller=previous_loop._controller,
+        policy=previous_loop._policy,
+        broker=previous_loop._broker,
+        verifier=previous_loop._verifier,
+        reasoning=previous_loop._reasoning,
+        acceptance=previous_loop._acceptance,
+        verification_plan=previous_loop._verification_plan,
+        verification_environment=previous_loop._verification_environment,
+        workspace=previous_loop._workspace,
+        budget=previous_loop._budget,
+        bounded_autonomy=previous_loop._bounded,
+        max_cycles=previous_loop._max_cycles,
+        lease_ttl_seconds=previous_loop._lease_ttl,
+    )
+
+
+def test_run3_restart_resumes_after_durable_worker_acceptance_without_replay(tmp_path):
+    import pytest
+    from scripts.third_engineering_run import build_loop, prepare_workspace
+    from vajra.runtime.run_manager import RunManager
+    from vajra.runtime.sqlite_run_store import SQLiteRunStore
+
+    class CrashAfterAcceptance:
+        def observe(self, *, phase, run_id, payload):
+            if phase.value == "OBSERVE":
+                raise RuntimeError("simulated process crash after worker acceptance")
+
+    class Gateway:
+        def __init__(self):
+            identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
+            self.adapter = TransportWorkerModelAdapter(
+                FakeKaggleResultTransport(), identity, timeout_seconds=1
+            )
+
+        def invoke(self, request, model_identity):
+            return self.adapter.invoke(request)
+
+    workspace = tmp_path / "restart-after-acceptance"
+    revision = prepare_workspace(workspace)
+    identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
+    database = tmp_path / "restart-after-acceptance.sqlite3"
+    loop, manager, store = build_loop(
+        workspace, revision, Gateway(), identity, "run3-restart-accepted", database
+    )
+    loop._observer = CrashAfterAcceptance()
+
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        loop.run("run3-restart-accepted")
+    interrupted = manager.get_run("run3-restart-accepted")
+    assert interrupted.state.value == "EXECUTING"
+    assert len(interrupted.steps[0].attempts) == 1
+    assert interrupted.steps[0].attempts[0].state.value == "SUCCEEDED"
+    store.close()
+
+    with SQLiteRunStore(database) as reopened:
+        recovered_manager = RunManager(state_store=reopened, event_store=reopened)
+        resumed = _rebuild_run3_loop_after_restart(loop, recovered_manager, reopened)
+        result = resumed.run("run3-restart-accepted")
+        recovered = recovered_manager.get_run("run3-restart-accepted")
+
+        assert result.completed is True
+        assert recovered.state.value == "COMPLETE"
+        assert len(recovered.steps) == 2
+        assert len(recovered.steps[0].attempts) == 1, "accepted intent must not be dispatched twice"
+        assert len(recovered.steps[1].attempts) == 1
+
+
+def test_run3_restart_waits_for_human_when_attempt_outcome_is_ambiguous(tmp_path):
+    import pytest
+    from scripts.third_engineering_run import build_loop, prepare_workspace
+    from vajra.runtime.run_manager import RunManager
+    from vajra.runtime.sqlite_run_store import SQLiteRunStore
+
+    class CrashBeforeDispatch:
+        def observe(self, *, phase, run_id, payload):
+            if phase.value == "EXECUTE":
+                raise RuntimeError("simulated process crash with a running attempt")
+
+    class Gateway:
+        def __init__(self):
+            identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
+            self.adapter = TransportWorkerModelAdapter(
+                FakeKaggleResultTransport(), identity, timeout_seconds=1
+            )
+
+        def invoke(self, request, model_identity):
+            return self.adapter.invoke(request)
+
+    workspace = tmp_path / "restart-ambiguous-attempt"
+    revision = prepare_workspace(workspace)
+    identity = ModelIdentity("kaggle", "qwen2.5-coder:32b", "ollama", "kaggle-batch")
+    database = tmp_path / "restart-ambiguous-attempt.sqlite3"
+    loop, manager, store = build_loop(
+        workspace, revision, Gateway(), identity, "run3-restart-ambiguous", database
+    )
+    loop._observer = CrashBeforeDispatch()
+
+    with pytest.raises(RuntimeError, match="simulated process crash"):
+        loop.run("run3-restart-ambiguous")
+    interrupted = manager.get_run("run3-restart-ambiguous")
+    assert interrupted.state.value == "EXECUTING"
+    assert interrupted.steps[0].attempts[0].state.value == "RUNNING"
+    store.close()
+
+    with SQLiteRunStore(database) as reopened:
+        recovered_manager = RunManager(state_store=reopened, event_store=reopened)
+        resumed = _rebuild_run3_loop_after_restart(loop, recovered_manager, reopened)
+        result = resumed.run("run3-restart-ambiguous")
+        recovered = recovered_manager.get_run("run3-restart-ambiguous")
+
+        assert result.waiting_human is True
+        assert recovered.state.value == "WAITING_HUMAN"
+        assert "outcome is ambiguous" in result.reason
+        assert len(recovered.steps[0].attempts) == 1, "ambiguous attempt must never be auto-replayed"
