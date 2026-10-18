@@ -30,7 +30,7 @@ This is deliberately not a swarm. Workers remain subordinate resources; Policy, 
 
 `LongHorizonLimits` provides hard bounds for stages, replans, model-call budget declaration, attempts, and wall-clock runtime. `AdvancedRunStore` is an append-only fsync-backed JSONL stage checkpoint journal.
 
-A resumed engine reconstructs completed stages from durable checkpoints and skips them. Failed verification never creates a completion checkpoint. Bound exhaustion fails closed.
+A resumed engine reconstructs completed stages from durable checkpoints and skips them. If the latest checkpoint for any stage is `RUNNING` or `VERIFYING`, restart fails closed and requires human reconciliation rather than automatically replaying a potentially side-effecting operation. Failed verification never creates a completion checkpoint. Bound exhaustion fails closed.
 
 The long-horizon layer is therefore resumable rather than dependent on one process, model session, or worker lifetime.
 
