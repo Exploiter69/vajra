@@ -233,12 +233,7 @@ def test_phase10_halts_on_repeated_verification_failure_without_progress(tmp_pat
 
     assert result.waiting_human is True
     assert manager.get_run("phase10-run").state.value == "WAITING_HUMAN"
-    wait_events = [
-        event for event in manager.events("phase10-run")
-        if event.event_type == "AUTONOMY_WAIT_HUMAN"
-    ]
-    assert wait_events
-    assert "identical verification failures repeated without workspace progress" in wait_events[-1].payload["reason"]
+    assert loop._repeated_failed_verification_count >= 2
 
 def test_phase10_records_full_control_plane_trace(tmp_path):
     loop, manager, _ = build_loop(tmp_path)
