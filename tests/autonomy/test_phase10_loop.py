@@ -11,7 +11,8 @@ from vajra.control.acceptance import AcceptanceEvaluator
 from vajra.control.controller import Controller
 from vajra.control.contracts import AcceptanceCriteria, AcceptancePredicate, stable_digest
 from vajra.control.limits import BoundedAutonomy
-from vajra.domain import Budget
+from vajra.domain import Budget, RunState
+from vajra.control.transition_authority import TransitionActor
 from vajra.domain.models import VerificationResult, VerificationStatus
 from vajra.execution.broker import ExecutionBroker
 from vajra.execution.contracts import ExecutionResult, ExecutionStatus
@@ -229,13 +230,14 @@ def test_phase10_halts_on_repeated_verification_failure_without_progress(tmp_pat
             )
 
     loop._verifier = AlwaysFailingVerifier()
-    run = manager.get_run("phase10-run")
+    for state in (RunState.QUEUED, RunState.ORIENTING, RunState.PLANNING, RunState.EXECUTING):
+        manager.transition("phase10-run", state, TransitionActor.SYSTEM)
 
-    assert loop._verify(run) is True
-    assert manager.get_run("phase10-run").state.value == "CREATED"
+    assert loop._verify(manager.get_run("phase10-run")) is True
+    assert manager.get_run("phase10-run").state is RunState.EXECUTING
     assert loop._verify(manager.get_run("phase10-run")) is False
 
-    assert manager.get_run("phase10-run").state.value == "WAITING_HUMAN"
+    assert manager.get_run("phase10-run").state is RunState.WAITING_HUMAN
     assert loop._repeated_failed_verification_count >= 2
 
 def test_phase10_records_full_control_plane_trace(tmp_path):
