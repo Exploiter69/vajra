@@ -148,6 +148,7 @@ class AutonomousEngineeringLoop:
         self._last_failed_command_signature: str | None = None
         self._repeated_failed_command_count = 0
         self._durable_state_restored = False
+        self._restored_plan_is_replan = False
 
     def run(self, run_id: str) -> LoopResult:
         if not self._durable_state_restored:
@@ -242,6 +243,13 @@ class AutonomousEngineeringLoop:
                     self.run_manager.recover_run(run_id)
                 continue
             if run.state is RunState.RECOVERING:
+                if self._restored_plan_is_replan:
+                    self.run_manager.transition(
+                        run_id, RunState.EXECUTING, TransitionActor.CONTROLLER,
+                        reason="resume persisted recovery plan after restart",
+                    )
+                    self._restored_plan_is_replan = False
+                    continue
                 failure_reason = self._verification_failure_reason()
                 try:
                     self._replan_after_recovery(run, failure_reason)
@@ -355,6 +363,7 @@ class AutonomousEngineeringLoop:
 
         self._plan = restored
         self._intent_cursor = 0
+        self._restored_plan_is_replan = plan_event.payload.get("replan") is True
         if run.state is RunState.RECOVERING:
             # Recovery may legitimately follow a known failed attempt. A still-running
             # attempt is different: its side effects are unknown, so never re-dispatch.
