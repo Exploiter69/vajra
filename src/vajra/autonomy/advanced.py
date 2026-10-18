@@ -279,10 +279,23 @@ class AdvancedAutonomyEngine:
         worker_capabilities: frozenset[str] = frozenset(),
     ) -> tuple[StageCheckpoint, ...]:
         self.validate(objective)
+        latest = {c.stage_id: c for c in self.store.latest(objective.objective_id)}
+        ambiguous = sorted(
+            (checkpoint for checkpoint in latest.values()
+             if checkpoint.state in {StageState.RUNNING, StageState.VERIFYING}),
+            key=lambda checkpoint: checkpoint.stage_id,
+        )
+        if ambiguous:
+            details = ", ".join(
+                f"{checkpoint.stage_id}={checkpoint.state.value}" for checkpoint in ambiguous
+            )
+            raise AdvancedAutonomyError(
+                "long-horizon restart found ambiguous in-flight stage checkpoint(s): "
+                f"{details}; human reconciliation required, refusing automatic replay"
+            )
         started = monotonic()
         attempts = 0
         model_calls = 0
-        latest = {c.stage_id: c for c in self.store.latest(objective.objective_id)}
         while True:
             if monotonic() - started >= self.limits.max_wall_clock_seconds:
                 raise AdvancedAutonomyError("long-horizon wall-clock bound exceeded")
